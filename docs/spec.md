@@ -165,7 +165,8 @@ This section reflects the current repository state, not just the original intent
   - System-wide display control is not implemented yet
 - [~] Settings exist, but only for part of the planned control surface
   - Work duration and pause timeout are configurable
-  - Dynamic prewarm / evolution scaling, hotkeys, loops, auto-launch, and deeper intensity tuning are not exposed yet
+  - Dynamic prewarm / evolution scaling exists in the engine, but it is not yet exposed as a user-tunable control
+  - Hotkeys, loops, auto-launch, and deeper intensity tuning are not exposed yet
 - [~] The product currently behaves like a focused preview app
   - The low-presence tray/menu bar product shape is still missing
 
@@ -178,7 +179,7 @@ This section reflects the current repository state, not just the original intent
 - [ ] Add tray / menu bar status presence
 - [ ] Add global hotkeys for pause, reset, and emergency actions
 - [ ] Add auto-launch support
-- [ ] Replace fixed prewarm / evolution timing with dynamic session-length scaling
+- [ ] Expose cue-window and intensity tuning beyond the current defaults
 - [ ] Add configurable loop behavior
 - [ ] Add a real `Recovery` state with smooth transition back to neutral
 - [ ] Add an explicit user action or leave-desk signal to start recovery
@@ -195,6 +196,7 @@ This section reflects the current repository state, not just the original intent
 - [x] Implement phase evaluation and snapshot generation
 - [x] Implement a basic session timer
 - [x] Implement pause, end-early, and reset controls
+- [x] Scale prewarm and evolution windows by session length with caps
 - [ ] Implement the real native display-effect pipeline
 - [ ] Move from preview-only visuals to actual system display control
 
@@ -205,6 +207,7 @@ This section reflects the current repository state, not just the original intent
 - [x] Expose work duration control
 - [x] Expose pause timeout control
 - [x] Expose cue-style presets
+- [ ] Expose cue-window tuning controls
 - [ ] Add tray / menu bar controls
 - [ ] Add hotkey configuration
 - [ ] Add auto-launch configuration
@@ -246,8 +249,8 @@ This section reflects the current repository state, not just the original intent
 - [ ] During roughly the first 80% of a `<= 50 minute` work session, the display appears unchanged
 - [ ] During the final dynamic cue window, the user can perceive change without being startled
 - [ ] At the break boundary, the display becomes visibly less attractive for continued work
-- [ ] Sessions from `2 minutes` upward remain valid, and sessions shorter than `2 minutes` are treated as unsupported when entered
-- [ ] Sessions longer than `50 minutes` do not keep extending prewarm and evolution indefinitely
+- [x] Sessions from `2 minutes` upward remain valid, and sessions shorter than `2 minutes` are treated as unsupported when entered
+- [x] Sessions longer than `50 minutes` do not keep extending prewarm and evolution indefinitely
 - [x] `End early` produces the same `Statue` state immediately rather than resetting the session
 - [x] If the user leaves the app in `Paused`, the display stays neutral only until the pause timeout elapses, then ambient cueing resumes automatically from the correct current phase
 
