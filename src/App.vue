@@ -60,7 +60,6 @@ const {
   pauseTimeoutMinutes,
   progress,
   previewRemainingFractionalMinutes,
-  remainingMinutes,
   resetSession,
   sessionStage,
   sessionStatus,
@@ -70,6 +69,18 @@ const {
   workDuration,
   pauseSession
 } = useTimerSession();
+
+const progressPercent = computed(() => clamp(progress.value * 100, 0, 100));
+
+function handleProgressScrub(value) {
+  if (sessionStage.value !== "Work") {
+    return;
+  }
+
+  const clampedPercent = clamp(value, 0, 100);
+  const remainingMinutes = (1 - clampedPercent / 100) * Math.max(workDuration.value, 0);
+  setRemainingMinutes(remainingMinutes);
+}
 
 const effectiveSnapshot = computed(() => {
   if (isEndingEarly.value && endingEarlySnapshot.value) {
@@ -507,10 +518,21 @@ onUnmounted(() => {
         </p>
       </section>
 
-      <section class="progress-panel" aria-hidden="true">
+      <section class="progress-panel">
         <div class="progress-track">
           <div class="progress-fill" :style="progressStyle"></div>
         </div>
+        <input
+          class="progress-scrubber"
+          type="range"
+          min="0"
+          max="100"
+          step="0.1"
+          :value="progressPercent"
+          :disabled="sessionStage !== 'Work'"
+          aria-label="Session progress"
+          @input="handleProgressScrub(Number($event.target.value))"
+        />
       </section>
 
       <TransitionGroup name="action-pill" tag="section" class="action-row">
@@ -616,17 +638,6 @@ onUnmounted(() => {
             <span>{{ option.description }}</span>
           </button>
         </div>
-
-        <label class="field">
-          <span>Preview point</span>
-          <input
-            :value="remainingMinutes"
-            type="range"
-            min="0"
-            :max="Math.max(workDuration, 1)"
-            @input="setRemainingMinutes(Number($event.target.value))"
-          />
-        </label>
 
         <label class="field">
           <span>

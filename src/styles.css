@@ -232,7 +232,8 @@ button {
 }
 
 .progress-panel {
-  padding: 0 2px;
+  position: relative;
+  padding: 8px 2px;
 }
 
 .progress-track {
@@ -248,6 +249,59 @@ button {
   transform-origin: left center;
   border-radius: inherit;
   background: linear-gradient(90deg, #718e58 0%, #bc8a47 65%, #9f5227 100%);
+  pointer-events: none;
+}
+
+.progress-scrubber {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 0;
+  bottom: 0;
+  width: auto;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.progress-scrubber::-webkit-slider-runnable-track {
+  height: 5px;
+  background: transparent;
+}
+
+.progress-scrubber::-moz-range-track {
+  height: 5px;
+  background: transparent;
+}
+
+.progress-scrubber::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  border: 1px solid rgba(63, 42, 21, 0.25);
+  background: #f7efe4;
+}
+
+.progress-scrubber::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(63, 42, 21, 0.25);
+  background: #f7efe4;
+}
+
+.progress-scrubber:disabled {
+  cursor: default;
+}
+
+.progress-scrubber:disabled::-webkit-slider-thumb,
+.progress-scrubber:disabled::-moz-range-thumb {
+  opacity: 0;
 }
 
 .action-row {
