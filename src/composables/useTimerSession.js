@@ -111,7 +111,6 @@ export function useTimerSession() {
   const isEarlyEnding = ref(false);
   const isCueTransitioning = ref(false);
   const sessionSnapshot = ref(neutralSnapshot());
-  const previewPointMinutes = ref(DEFAULT_WORK_DURATION_MINUTES);
   let unlistenSession = null;
   let isApplyingBackendState = false;
 
@@ -137,20 +136,6 @@ export function useTimerSession() {
   });
   const displayTime = computed(() => formatClock(currentSeconds.value));
   const remainingSeconds = computed(() => currentSeconds.value);
-  const remainingMinutes = computed(() => {
-    if (hasActiveSession.value) {
-      return Math.ceil(currentSeconds.value / 60);
-    }
-
-    return Math.ceil(previewPointMinutes.value);
-  });
-  const previewRemainingFractionalMinutes = computed(() => {
-    if (hasActiveSession.value) {
-      return currentSeconds.value / 60;
-    }
-
-    return previewPointMinutes.value;
-  });
   const progress = computed(() => {
     if (sessionStage.value === "Work") {
       const total = Math.max(workDuration.value * 60, 1);
@@ -171,7 +156,6 @@ export function useTimerSession() {
     const raw = window.localStorage.getItem(STORAGE_KEY);
 
     if (!raw) {
-      previewPointMinutes.value = workDuration.value;
       return;
     }
 
@@ -196,8 +180,6 @@ export function useTimerSession() {
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
     }
-
-    previewPointMinutes.value = workDuration.value;
   }
 
   function persistSessionConfig() {
@@ -214,10 +196,6 @@ export function useTimerSession() {
 
   function setCueStyle(value) {
     cueStyle.value = normalizeCueStyle(value);
-  }
-
-  function setRemainingMinutes(value) {
-    previewPointMinutes.value = clamp(value, 0, Math.max(workDuration.value, 0));
   }
 
   function applySessionPayload(payload) {
@@ -505,8 +483,6 @@ export function useTimerSession() {
       return;
     }
 
-    previewPointMinutes.value = clamp(previewPointMinutes.value, 0, safeDuration);
-
     if (!hasActiveSession.value && !hasTauriRuntime()) {
       syncFallbackSession();
     }
@@ -545,9 +521,7 @@ export function useTimerSession() {
     pauseSession,
     pauseTimeDisplay,
     pauseTimeoutMinutes,
-    previewRemainingFractionalMinutes,
     progress,
-    remainingMinutes,
     remainingSeconds,
     resetSession,
     sessionSnapshot,
@@ -557,7 +531,6 @@ export function useTimerSession() {
     sessionStatus,
     setSessionProgressPercent,
     setCueStyle,
-    setRemainingMinutes,
     statusLine,
     workDuration
   };
