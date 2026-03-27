@@ -59,7 +59,6 @@ function neutralSnapshot() {
     phase: "Stable",
     saturation: 1,
     warmthKelvin: 6500,
-    grayscale: 0
   };
 }
 
@@ -83,7 +82,6 @@ function normalizeSnapshot(snapshot) {
     phase: phaseMap[normalizedPhase] ?? snapshot.phase ?? "Stable",
     saturation: snapshot.saturation ?? 1,
     warmthKelvin: snapshot.warmthKelvin ?? snapshot.warmth_kelvin ?? 6500,
-    grayscale: snapshot.grayscale ?? 0
   };
 }
 

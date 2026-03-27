@@ -15,7 +15,6 @@ pub enum Phase {
 pub struct EffectSnapshot {
     pub phase: Phase,
     pub saturation: f32,
-    pub grayscale: f32,
     pub warmth_kelvin: u32,
 }
 
@@ -47,7 +46,6 @@ pub fn calculate_snapshot(
         return EffectSnapshot {
             phase: Phase::Stable,
             saturation: 1.0,
-            grayscale: 0.0,
             warmth_kelvin: 6500,
         };
     }
@@ -60,7 +58,6 @@ pub fn calculate_snapshot(
         return EffectSnapshot {
             phase: Phase::Jnd,
             saturation: 1.0 - 0.28 * curve,
-            grayscale: 0.18 * curve,
             warmth_kelvin: (6500.0 - 1200.0 * curve) as u32,
         };
     }
@@ -75,7 +72,6 @@ pub fn calculate_snapshot(
             Phase::Evolution
         },
         saturation: 0.72 - 0.54 * curve,
-        grayscale: 0.18 + 0.74 * curve,
         warmth_kelvin: (5300.0 - 2800.0 * curve) as u32,
     }
 }
@@ -103,7 +99,7 @@ mod tests {
     fn reaches_evolution_for_two_minute_sessions() {
         let snapshot = calculate_snapshot(&SessionConfig::default(), 2.0, 0.1);
         assert_eq!(snapshot.phase, Phase::Evolution);
-        assert!(snapshot.grayscale > 0.18);
+        assert!(snapshot.saturation < 0.72);
     }
 
     #[test]
@@ -116,6 +112,6 @@ mod tests {
     fn reaches_statue_at_zero() {
         let snapshot = calculate_snapshot(&SessionConfig::default(), 50.0, 0.0);
         assert_eq!(snapshot.phase, Phase::Statue);
-        assert!(snapshot.grayscale > 0.5);
+        assert!(snapshot.saturation < 0.3);
     }
 }

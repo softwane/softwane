@@ -169,24 +169,17 @@ mod macos {
             let modifiers = cue_style.modifiers();
             let warmth =
                 (normalize_warmth(snapshot.warmth_kelvin) * modifiers.warmth).clamp(0.0, 1.0);
-            let grayscale =
-                (snapshot.grayscale.clamp(0.0, 1.0) * modifiers.grayscale).clamp(0.0, 1.0);
             let saturation =
                 (snapshot.saturation.clamp(0.0, 1.0) * modifiers.saturation).clamp(0.0, 1.0);
-            let chroma = (saturation * (1.0 - grayscale)).clamp(0.0, 1.0);
-            let brightness = (1.0
-                - warmth * modifiers.brightness_warmth
-                - grayscale * modifiers.brightness_grayscale)
+            let chroma = saturation;
+            let brightness = (1.0 - warmth * modifiers.brightness_warmth)
                 .clamp(modifiers.min_brightness, 1.0);
             let red_scale = (brightness * (1.0 + warmth * modifiers.red_boost)).clamp(0.0, 1.25);
             let green_scale =
                 (brightness * (1.0 + warmth * modifiers.green_boost)).clamp(0.0, 1.15);
             let blue_scale =
                 (brightness * (1.0 - warmth * modifiers.blue_reduction)).clamp(0.0, 1.0);
-            let gamma = (1.0
-                + grayscale * modifiers.gamma_grayscale
-                + (1.0 - chroma) * modifiers.gamma_chroma)
-                .clamp(1.0, 2.2);
+            let gamma = (1.0 + (1.0 - chroma) * modifiers.gamma_chroma).clamp(1.0, 2.2);
 
             for table in baseline_tables {
                 let red = transform_channel(&table.red, red_scale, gamma);
@@ -213,8 +206,7 @@ mod macos {
     }
 
     fn is_neutral_snapshot(snapshot: &EffectSnapshot) -> bool {
-        snapshot.grayscale <= 0.001
-            && (snapshot.saturation - 1.0).abs() <= 0.001
+        (snapshot.saturation - 1.0).abs() <= 0.001
             && snapshot.warmth_kelvin >= NEUTRAL_WARMTH_KELVIN as u32
     }
 
@@ -318,15 +310,12 @@ mod macos {
     #[derive(Debug, Clone, Copy)]
     struct MacCueStyleModifiers {
         warmth: f32,
-        grayscale: f32,
         saturation: f32,
         brightness_warmth: f32,
-        brightness_grayscale: f32,
         min_brightness: f32,
         red_boost: f32,
         green_boost: f32,
         blue_reduction: f32,
-        gamma_grayscale: f32,
         gamma_chroma: f32,
     }
 
@@ -335,41 +324,32 @@ mod macos {
             match self {
                 CueStyle::Dim => MacCueStyleModifiers {
                     warmth: 0.18,
-                    grayscale: 1.0,
                     saturation: 0.74,
                     brightness_warmth: 0.025,
-                    brightness_grayscale: 0.16,
                     min_brightness: 0.58,
                     red_boost: 0.05,
                     green_boost: 0.0,
                     blue_reduction: 0.12,
-                    gamma_grayscale: 1.1,
                     gamma_chroma: 0.52,
                 },
                 CueStyle::Full => MacCueStyleModifiers {
                     warmth: 1.18,
-                    grayscale: 1.0,
                     saturation: 0.88,
                     brightness_warmth: 0.075,
-                    brightness_grayscale: 0.11,
                     min_brightness: 0.66,
                     red_boost: 0.19,
                     green_boost: 0.03,
                     blue_reduction: 0.28,
-                    gamma_grayscale: 1.05,
                     gamma_chroma: 0.42,
                 },
                 CueStyle::Warm => MacCueStyleModifiers {
                     warmth: 0.9,
-                    grayscale: 0.55,
                     saturation: 0.97,
                     brightness_warmth: 0.055,
-                    brightness_grayscale: 0.065,
                     min_brightness: 0.74,
                     red_boost: 0.15,
                     green_boost: 0.02,
                     blue_reduction: 0.2,
-                    gamma_grayscale: 0.72,
                     gamma_chroma: 0.24,
                 },
             }
@@ -516,8 +496,7 @@ mod windows {
     fn is_neutral_snapshot(snapshot: &EffectSnapshot) -> bool {
         // Treat extremely subtle early-JND values as neutral to avoid visible "kick"
         // when we first switch from identity to a non-identity matrix.
-        snapshot.grayscale <= 0.01
-            && (snapshot.saturation - 1.0).abs() <= 0.01
+        (snapshot.saturation - 1.0).abs() <= 0.01
             && snapshot.warmth_kelvin >= 6450
     }
 
@@ -553,25 +532,10 @@ mod windows {
 
     // Matrices follow the GDI+ convention referenced by MAGCOLOREFFECT:
     // color vector (r,g,b,a,1) is multiplied on the left: v' = v * M.
-    fn grayscale_matrix(intensity: f32) -> [[f32; 5]; 5] {
-        let t = intensity.clamp(0.0, 1.0);
-        let lr = 0.2126;
-        let lg = 0.7152;
-        let lb = 0.0722;
-        let inv = 1.0 - t;
-        [
-            [inv + t * lr, t * lr, t * lr, 0.0, 0.0],
-            [t * lg, inv + t * lg, t * lg, 0.0, 0.0],
-            [t * lb, t * lb, inv + t * lb, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 1.0],
-        ]
-    }
-
     fn saturation_matrix(saturation: f32) -> [[f32; 5]; 5] {
         let s = saturation.clamp(0.0, 1.0);
         let lr = 0.2126;
-        let lg = 0.7152;
+        let lg = 0.7;
         let lb = 0.0722;
         let inv = 1.0 - s;
         [
@@ -608,7 +572,6 @@ mod windows {
     #[derive(Debug, Clone, Copy)]
     struct WindowsCueStyleModifiers {
         warmth: f32,
-        grayscale: f32,
         saturation: f32,
     }
 
@@ -617,17 +580,14 @@ mod windows {
             match self {
                 CueStyle::Dim => WindowsCueStyleModifiers {
                     warmth: 0.18,
-                    grayscale: 1.0,
                     saturation: 0.74,
                 },
                 CueStyle::Full => WindowsCueStyleModifiers {
                     warmth: 1.18,
-                    grayscale: 1.0,
                     saturation: 0.88,
                 },
                 CueStyle::Warm => WindowsCueStyleModifiers {
                     warmth: 0.9,
-                    grayscale: 0.55,
                     saturation: 0.97,
                 },
             }
@@ -641,15 +601,13 @@ mod windows {
 
         let m = cue_style.modifiers_windows();
         let warmth = (normalize_warmth(snapshot.warmth_kelvin) * m.warmth).clamp(0.0, 1.0);
-        let grayscale = (snapshot.grayscale.clamp(0.0, 1.0) * m.grayscale).clamp(0.0, 1.0);
         let saturation = (snapshot.saturation.clamp(0.0, 1.0) * m.saturation).clamp(0.0, 1.0);
 
-        let mg = grayscale_matrix(grayscale);
         let ms = saturation_matrix(saturation);
         let mw = warmth_matrix(warmth);
 
-        // v' = v * Mg * Ms * Mw
-        mul(mul(mg, ms), mw)
+        // v' = v * Ms * Mw
+        mul(ms, mw)
     }
 
     #[derive(Debug, thiserror::Error)]
@@ -692,7 +650,6 @@ mod windows {
             let snapshot = EffectSnapshot {
                 phase: Phase::Evolution,
                 saturation: 0.5,
-                grayscale: 0.4,
                 warmth_kelvin: 4000,
             };
             let m = snapshot_to_matrix(&snapshot, CueStyle::Warm);
@@ -706,7 +663,6 @@ mod windows {
             let snapshot = EffectSnapshot {
                 phase: Phase::Stable,
                 saturation: 1.0,
-                grayscale: 0.0,
                 warmth_kelvin: 6500,
             };
             let m = snapshot_to_matrix(&snapshot, CueStyle::Warm);
