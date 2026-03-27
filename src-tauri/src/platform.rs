@@ -45,11 +45,14 @@ impl DisplayEffectApplier for MockDisplayEffectApplier {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
 pub type PlatformDisplayEffectApplier = MockDisplayEffectApplier;
 
 #[cfg(target_os = "macos")]
 pub type PlatformDisplayEffectApplier = MacDisplayEffectApplier;
+
+#[cfg(target_os = "windows")]
+pub type PlatformDisplayEffectApplier = WindowsDisplayEffectApplier;
 
 #[cfg(target_os = "macos")]
 mod macos {
@@ -378,6 +381,344 @@ mod macos {
 
 #[cfg(target_os = "macos")]
 pub use macos::PublicMacDisplayEffectApplier as MacDisplayEffectApplier;
+
+#[cfg(target_os = "windows")]
+mod windows {
+    use std::sync::Mutex;
+
+    use super::{ApplyResult, CueStyle, DisplayEffectApplier};
+    use crate::engine::EffectSnapshot;
+
+    #[derive(Default)]
+    struct WindowsState {
+        initialized: bool,
+        last_matrix: Option<[[f32; 5]; 5]>,
+    }
+
+    #[derive(Default)]
+    pub struct WindowsDisplayEffectApplier {
+        state: Mutex<WindowsState>,
+    }
+
+    impl DisplayEffectApplier for WindowsDisplayEffectApplier {
+        fn apply(&self, snapshot: &EffectSnapshot, cue_style: CueStyle) -> ApplyResult {
+            match self.apply_snapshot(snapshot, cue_style) {
+                Ok(applied) => ApplyResult {
+                    applied,
+                    backend: "windows-magnification",
+                },
+                Err(_) => ApplyResult {
+                    applied: false,
+                    backend: "windows-magnification",
+                },
+            }
+        }
+    }
+
+    impl Drop for WindowsDisplayEffectApplier {
+        fn drop(&mut self) {
+            let _ = self.restore_identity();
+            let _ = self.uninitialize();
+        }
+    }
+
+    impl WindowsDisplayEffectApplier {
+        fn apply_snapshot(
+            &self,
+            snapshot: &EffectSnapshot,
+            cue_style: CueStyle,
+        ) -> Result<bool, WindowsDisplayError> {
+            if is_neutral_snapshot(snapshot) {
+                self.restore_identity()?;
+                return Ok(true);
+            }
+
+            self.ensure_initialized()?;
+
+            let matrix = snapshot_to_matrix(snapshot, cue_style);
+            self.set_fullscreen_color_effect(matrix)?;
+            Ok(true)
+        }
+
+        fn ensure_initialized(&self) -> Result<(), WindowsDisplayError> {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| WindowsDisplayError::StatePoisoned)?;
+            if state.initialized {
+                return Ok(());
+            }
+
+            unsafe {
+                if MagInitialize() == 0 {
+                    return Err(WindowsDisplayError::ApiCallFailed("MagInitialize"));
+                }
+            }
+
+            state.initialized = true;
+            Ok(())
+        }
+
+        fn uninitialize(&self) -> Result<(), WindowsDisplayError> {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| WindowsDisplayError::StatePoisoned)?;
+            if !state.initialized {
+                return Ok(());
+            }
+
+            unsafe {
+                if MagUninitialize() == 0 {
+                    return Err(WindowsDisplayError::ApiCallFailed("MagUninitialize"));
+                }
+            }
+
+            state.initialized = false;
+            state.last_matrix = None;
+            Ok(())
+        }
+
+        fn restore_identity(&self) -> Result<(), WindowsDisplayError> {
+            self.ensure_initialized()?;
+            self.set_fullscreen_color_effect(identity_matrix())
+        }
+
+        fn set_fullscreen_color_effect(
+            &self,
+            matrix: [[f32; 5]; 5],
+        ) -> Result<(), WindowsDisplayError> {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| WindowsDisplayError::StatePoisoned)?;
+
+            if let Some(prev) = state.last_matrix {
+                if matrix_nearly_equal(&prev, &matrix, 0.0005) {
+                    return Ok(());
+                }
+            }
+
+            let effect = MAGCOLOREFFECT { transform: matrix };
+            unsafe {
+                if MagSetFullscreenColorEffect(&effect as *const MAGCOLOREFFECT) == 0 {
+                    return Err(WindowsDisplayError::ApiCallFailed(
+                        "MagSetFullscreenColorEffect",
+                    ));
+                }
+            }
+
+            state.last_matrix = Some(matrix);
+            Ok(())
+        }
+    }
+
+    fn is_neutral_snapshot(snapshot: &EffectSnapshot) -> bool {
+        // Treat extremely subtle early-JND values as neutral to avoid visible "kick"
+        // when we first switch from identity to a non-identity matrix.
+        snapshot.grayscale <= 0.01
+            && (snapshot.saturation - 1.0).abs() <= 0.01
+            && snapshot.warmth_kelvin >= 6450
+    }
+
+    fn identity_matrix() -> [[f32; 5]; 5] {
+        [
+            [1.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 1.0],
+        ]
+    }
+
+    fn matrix_nearly_equal(a: &[[f32; 5]; 5], b: &[[f32; 5]; 5], eps: f32) -> bool {
+        a.iter().flatten().zip(b.iter().flatten()).all(|(x, y)| {
+            (*x - *y).abs() <= eps || ((*x).is_nan() && (*y).is_nan())
+        })
+    }
+
+    fn mul(a: [[f32; 5]; 5], b: [[f32; 5]; 5]) -> [[f32; 5]; 5] {
+        let mut out = [[0.0f32; 5]; 5];
+        for r in 0..5 {
+            for c in 0..5 {
+                let mut acc = 0.0;
+                for k in 0..5 {
+                    acc += a[r][k] * b[k][c];
+                }
+                out[r][c] = acc;
+            }
+        }
+        out
+    }
+
+    // Matrices follow the GDI+ convention referenced by MAGCOLOREFFECT:
+    // color vector (r,g,b,a,1) is multiplied on the left: v' = v * M.
+    fn grayscale_matrix(intensity: f32) -> [[f32; 5]; 5] {
+        let t = intensity.clamp(0.0, 1.0);
+        let lr = 0.2126;
+        let lg = 0.7152;
+        let lb = 0.0722;
+        let inv = 1.0 - t;
+        [
+            [inv + t * lr, t * lr, t * lr, 0.0, 0.0],
+            [t * lg, inv + t * lg, t * lg, 0.0, 0.0],
+            [t * lb, t * lb, inv + t * lb, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 1.0],
+        ]
+    }
+
+    fn saturation_matrix(saturation: f32) -> [[f32; 5]; 5] {
+        let s = saturation.clamp(0.0, 1.0);
+        let lr = 0.2126;
+        let lg = 0.7152;
+        let lb = 0.0722;
+        let inv = 1.0 - s;
+        [
+            [inv * lr + s, inv * lr, inv * lr, 0.0, 0.0],
+            [inv * lg, inv * lg + s, inv * lg, 0.0, 0.0],
+            [inv * lb, inv * lb, inv * lb + s, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 1.0],
+        ]
+    }
+
+    fn warmth_matrix(normalized_warmth: f32) -> [[f32; 5]; 5] {
+        let w = normalized_warmth.clamp(0.0, 1.0);
+        // TODO(windows): "Full erosion" final stage can feel slightly green.
+        // Tune these RGB scalars (and/or CueStyle::Full modifiers) to reduce green bias.
+        let r = (1.0 + 0.15 * w).clamp(0.0, 1.25);
+        let g = (1.0 + 0.02 * w).clamp(0.0, 1.15);
+        let b = (1.0 - 0.20 * w).clamp(0.0, 1.0);
+        [
+            [r, 0.0, 0.0, 0.0, 0.0],
+            [0.0, g, 0.0, 0.0, 0.0],
+            [0.0, 0.0, b, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 1.0],
+        ]
+    }
+
+    fn normalize_warmth(warmth_kelvin: u32) -> f32 {
+        let neutral = 6500.0;
+        let min = 2500.0;
+        ((neutral - warmth_kelvin as f32) / (neutral - min)).clamp(0.0, 1.0)
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct WindowsCueStyleModifiers {
+        warmth: f32,
+        grayscale: f32,
+        saturation: f32,
+    }
+
+    impl CueStyle {
+        fn modifiers_windows(self) -> WindowsCueStyleModifiers {
+            match self {
+                CueStyle::Dim => WindowsCueStyleModifiers {
+                    warmth: 0.18,
+                    grayscale: 1.0,
+                    saturation: 0.74,
+                },
+                CueStyle::Full => WindowsCueStyleModifiers {
+                    warmth: 1.18,
+                    grayscale: 1.0,
+                    saturation: 0.88,
+                },
+                CueStyle::Warm => WindowsCueStyleModifiers {
+                    warmth: 0.9,
+                    grayscale: 0.55,
+                    saturation: 0.97,
+                },
+            }
+        }
+    }
+
+    fn snapshot_to_matrix(snapshot: &EffectSnapshot, cue_style: CueStyle) -> [[f32; 5]; 5] {
+        if is_neutral_snapshot(snapshot) {
+            return identity_matrix();
+        }
+
+        let m = cue_style.modifiers_windows();
+        let warmth = (normalize_warmth(snapshot.warmth_kelvin) * m.warmth).clamp(0.0, 1.0);
+        let grayscale = (snapshot.grayscale.clamp(0.0, 1.0) * m.grayscale).clamp(0.0, 1.0);
+        let saturation = (snapshot.saturation.clamp(0.0, 1.0) * m.saturation).clamp(0.0, 1.0);
+
+        let mg = grayscale_matrix(grayscale);
+        let ms = saturation_matrix(saturation);
+        let mw = warmth_matrix(warmth);
+
+        // v' = v * Mg * Ms * Mw
+        mul(mul(mg, ms), mw)
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    enum WindowsDisplayError {
+        #[error("windows display state lock was poisoned")]
+        StatePoisoned,
+        #[error("windows api call failed: {0}")]
+        ApiCallFailed(&'static str),
+    }
+
+    #[repr(C)]
+    struct MAGCOLOREFFECT {
+        transform: [[f32; 5]; 5],
+    }
+
+    #[link(name = "Magnification")]
+    unsafe extern "system" {
+        fn MagInitialize() -> i32;
+        fn MagUninitialize() -> i32;
+        fn MagSetFullscreenColorEffect(pEffect: *const MAGCOLOREFFECT) -> i32;
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{identity_matrix, matrix_nearly_equal, snapshot_to_matrix};
+        use crate::engine::{EffectSnapshot, Phase};
+        use crate::platform::CueStyle;
+
+        #[test]
+        fn identity_is_stable() {
+            assert!(matrix_nearly_equal(
+                &identity_matrix(),
+                &identity_matrix(),
+                0.0
+            ));
+        }
+
+        #[test]
+        fn snapshot_matrix_is_finite() {
+            let snapshot = EffectSnapshot {
+                phase: Phase::Evolution,
+                saturation: 0.5,
+                grayscale: 0.4,
+                warmth_kelvin: 4000,
+            };
+            let m = snapshot_to_matrix(&snapshot, CueStyle::Warm);
+            for v in m.iter().flatten() {
+                assert!(v.is_finite());
+            }
+        }
+
+        #[test]
+        fn neutral_like_snapshot_is_close_to_identity() {
+            let snapshot = EffectSnapshot {
+                phase: Phase::Stable,
+                saturation: 1.0,
+                grayscale: 0.0,
+                warmth_kelvin: 6500,
+            };
+            let m = snapshot_to_matrix(&snapshot, CueStyle::Warm);
+            assert!(matrix_nearly_equal(&m, &identity_matrix(), 0.001));
+        }
+    }
+
+    pub use WindowsDisplayEffectApplier as PublicWindowsDisplayEffectApplier;
+}
+
+#[cfg(target_os = "windows")]
+pub use windows::PublicWindowsDisplayEffectApplier as WindowsDisplayEffectApplier;
 
 pub fn apply_preview(
     applier: State<'_, ManagedDisplayEffectApplier>,
