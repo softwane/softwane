@@ -27,8 +27,8 @@ fn resolve_cue_windows(config: &SessionConfig, session_duration_minutes: f32) ->
     let capped_duration = session_duration_minutes
         .max(config.min_supported_work_duration_minutes as f32)
         .min(config.work_duration_minutes as f32);
-    let prewarm = (capped_duration * config.prewarm_ratio_of_session)
-        .min(config.prewarm_cap_minutes as f32);
+    let prewarm =
+        (capped_duration * config.prewarm_ratio_of_session).min(config.prewarm_cap_minutes as f32);
     let evolution = (capped_duration * config.evolution_ratio_of_session)
         .min(config.evolution_cap_minutes as f32);
 

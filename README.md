@@ -22,7 +22,7 @@ This repository currently contains:
 
 Before running the project, install:
 
-- `Rust` and `cargo` with toolchain `1.85.0` or newer
+- `Rust` and `cargo` with toolchain `1.89.0` or newer
 - `Node.js` 20+ and either `pnpm` or `npm`
 - Tauri system prerequisites for your OS
 
@@ -63,14 +63,14 @@ npm install
 
 This repository includes a pinned Rust toolchain file:
 
-- `rust-toolchain.toml` -> `1.85.0`
+- `rust-toolchain.toml` -> `1.89.0`
 
 If your local Cargo version is older, update Rust before building:
 
 ```bash
-rustup toolchain install 1.85.0
-rustup override set 1.85.0
-rustup default 1.85.0
+rustup toolchain install 1.89.0
+rustup override set 1.89.0
+rustup default 1.89.0
 ```
 
 If you prefer tracking the latest stable release instead:
@@ -120,7 +120,7 @@ pnpm dev
 
 Then open the local Vite URL shown in the terminal.
 
-This is useful for reviewing the visual phase model before the native display integration exists.
+This is useful for reviewing the visual phase model without applying system-wide display changes.
 
 ## Current Implementation Status
 
@@ -130,13 +130,13 @@ Implemented:
 - Phase model: `Stable`, `JND`, `Evolution`, `Statue`
 - Sigmoid-based transition curve
 - Mock display effect adapter
+- macOS native display adapter using `Core Graphics` transfer tables as a system-wide fallback
 - Vue 3 preview UI
 - Product and technical spec
 
 Not implemented yet:
 
 - Windows `Magnification API` integration
-- macOS `Core Graphics` integration
 - Tray/menu bar behavior
 - Global hotkeys
 - Auto-launch
@@ -162,8 +162,8 @@ Your local Rust/Cargo is too old for the dependency graph being resolved.
 Fix:
 
 ```bash
-rustup toolchain install 1.85.0
-rustup override set 1.85.0
+rustup toolchain install 1.89.0
+rustup override set 1.89.0
 pnpm install
 pnpm tauri:dev
 ```

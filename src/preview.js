@@ -81,11 +81,79 @@ function normalizeCommandSnapshot(snapshot) {
   };
 }
 
-export async function getPreviewSnapshot(sessionDurationMinutes, remainingMinutes) {
+export async function applyNativeSnapshot(snapshot, cueStyle = "warm") {
+  try {
+    const applyResult = await invoke("apply_effect_snapshot", {
+      phase: snapshot.phase,
+      saturation: snapshot.saturation,
+      grayscale: snapshot.grayscale,
+      warmthKelvin: Math.round(snapshot.warmthKelvin),
+      cueStyle
+    });
+
+    return applyResult;
+  } catch {
+    return {
+      applied: false,
+      backend: "browser-preview"
+    };
+  }
+}
+
+export async function animateNativeSnapshot(fromSnapshot, toSnapshot, cueStyle = "warm", durationMs = 2800) {
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+    return applyNativeSnapshot(toSnapshot, cueStyle);
+  }
+
+  const startedAt = window.performance.now();
+  let lastAppliedAt = 0;
+  const minFrameGapMs = 80;
+
+  return new Promise((resolve) => {
+    const tick = async (now) => {
+      const progress = clamp((now - startedAt) / durationMs, 0, 1);
+      const eased = progress * progress * (3 - 2 * progress);
+      const snapshot = {
+        phase: progress >= 1 ? toSnapshot.phase : fromSnapshot.phase,
+        saturation: fromSnapshot.saturation + (toSnapshot.saturation - fromSnapshot.saturation) * eased,
+        warmthKelvin: fromSnapshot.warmthKelvin + (toSnapshot.warmthKelvin - fromSnapshot.warmthKelvin) * eased,
+        grayscale: fromSnapshot.grayscale + (toSnapshot.grayscale - fromSnapshot.grayscale) * eased
+      };
+
+      if (progress >= 1 || now - lastAppliedAt >= minFrameGapMs) {
+        lastAppliedAt = now;
+        await applyNativeSnapshot(snapshot, cueStyle);
+      }
+
+      if (progress < 1) {
+        window.requestAnimationFrame((nextNow) => {
+          void tick(nextNow);
+        });
+        return;
+      }
+
+      resolve({
+        snapshot: {
+          phase: toSnapshot.phase,
+          saturation: toSnapshot.saturation,
+          warmthKelvin: toSnapshot.warmthKelvin,
+          grayscale: toSnapshot.grayscale
+        }
+      });
+    };
+
+    window.requestAnimationFrame((now) => {
+      void tick(now);
+    });
+  });
+}
+
+export async function getPreviewSnapshot(sessionDurationMinutes, remainingMinutes, cueStyle = "warm") {
   try {
     const payload = await invoke("preview_effect", {
       sessionDurationMinutes,
-      remainingMinutes
+      remainingMinutes,
+      cueStyle
     });
 
     return {

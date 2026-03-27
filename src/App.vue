@@ -2,9 +2,15 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import erodeMark from "./assets/erode-mark.svg";
 import { useTimerSession } from "./composables/useTimerSession";
-import { getPreviewSnapshot } from "./preview";
+import { animateNativeSnapshot, applyNativeSnapshot, getPreviewSnapshot } from "./preview";
 
 const PAUSE_TRANSITION_DURATION_MS = 2800;
+const NEUTRAL_SNAPSHOT = Object.freeze({
+  phase: "Stable",
+  saturation: 1,
+  warmthKelvin: 6500,
+  grayscale: 0
+});
 
 const isSettingsOpen = ref(false);
 const isEndingEarly = ref(false);
@@ -18,25 +24,26 @@ const snapshot = ref({
   grayscale: 0
 });
 const isCueTransitioning = ref(false);
+const lastAppliedNativeSnapshot = ref({ ...NEUTRAL_SNAPSHOT });
 const bodyMatrixValues = ref(identityMatrix().map((value) => value.toFixed(6)).join(" "));
 let bodyMatrix = identityMatrix();
 let bodyMatrixFrame = null;
 
 const cueStyleOptions = [
   {
-    id: "color",
-    label: "Color drift",
-    description: "Reduce saturation first. No heavy grayscale."
+    id: "dim",
+    label: "Dim fade",
+    description: "Make the screen visibly darker and ashier."
   },
   {
     id: "warm",
     label: "Warm drift",
-    description: "Shift warmth and desaturate together."
+    description: "Balanced warmth and fade for everyday use."
   },
   {
     id: "full",
     label: "Full erosion",
-    description: "Push warmth, grayscale, and friction hardest."
+    description: "Push warmth, dimming, and washout hardest."
   }
 ];
 
@@ -175,8 +182,8 @@ function kelvinToWarmth(value) {
 
 function cueStyleModifiers(style) {
   switch (style) {
-    case "color":
-      return { warmth: 0.35, grayscale: 0.12, saturation: 1.08 };
+    case "dim":
+      return { warmth: 0.2, grayscale: 1.05, saturation: 0.72 };
     case "full":
       return { warmth: 1.15, grayscale: 1.15, saturation: 0.9 };
     default:
@@ -335,17 +342,30 @@ function waitForMs(durationMs) {
   });
 }
 
-function handleResetSession() {
+async function handleResetSession() {
   if (isResetting.value || isEndingEarly.value) {
     return;
   }
 
   isSettingsOpen.value = false;
   isResetting.value = true;
-  resetSession();
-  window.requestAnimationFrame(() => {
+
+  const fromSnapshot = {
+    ...effectiveSnapshot.value
+  };
+
+  try {
+    await animateNativeSnapshot(
+      fromSnapshot,
+      NEUTRAL_SNAPSHOT,
+      cueStyle.value,
+      PAUSE_TRANSITION_DURATION_MS
+    );
+  } finally {
+    lastAppliedNativeSnapshot.value = { ...NEUTRAL_SNAPSHOT };
+    resetSession();
     isResetting.value = false;
-  });
+  }
 }
 
 function handleBeginSession() {
@@ -361,10 +381,11 @@ async function handleEndSessionEarly() {
     return;
   }
 
-  const payload = await getPreviewSnapshot(workDuration.value, 0);
+  const payload = await getPreviewSnapshot(workDuration.value, 0, cueStyle.value);
   isEndingEarly.value = true;
   endingEarlyFrozenTime.value = displayTime.value;
   endingEarlySnapshot.value = payload.snapshot;
+  lastAppliedNativeSnapshot.value = { ...payload.snapshot };
   endSessionEarly();
   await waitForMs(PAUSE_TRANSITION_DURATION_MS);
   endingEarlySnapshot.value = null;
@@ -374,22 +395,66 @@ async function handleEndSessionEarly() {
 
 async function refreshPreview() {
   if (!hasActiveSession.value && !isWorkDurationSupported.value) {
-    snapshot.value = {
-      phase: "Stable",
-      saturation: 1,
-      warmthKelvin: 6500,
-      grayscale: 0
-    };
+    snapshot.value = { ...NEUTRAL_SNAPSHOT };
     return;
   }
 
-  const payload = await getPreviewSnapshot(workDuration.value, previewRemainingFractionalMinutes.value);
+  const payload = await getPreviewSnapshot(
+    workDuration.value,
+    previewRemainingFractionalMinutes.value,
+    cueStyle.value
+  );
   snapshot.value = payload.snapshot;
+
+  if (isCueEnabled.value) {
+    lastAppliedNativeSnapshot.value = { ...payload.snapshot };
+  }
 }
 
-watch([previewRemainingFractionalMinutes, sessionStage, workDuration], () => {
+watch([previewRemainingFractionalMinutes, sessionStage, workDuration, cueStyle], () => {
   void refreshPreview();
 });
+
+watch(
+  cueStyle,
+  () => {
+    if (!hasActiveSession.value || isCueSuppressed.value || isResetting.value) {
+      return;
+    }
+
+    void applyNativeSnapshot(effectiveSnapshot.value, cueStyle.value);
+  }
+);
+
+watch(
+  isCueEnabled,
+  (enabled, wasEnabled) => {
+    if (isResetting.value || enabled === wasEnabled) {
+      return;
+    }
+
+    if (!enabled) {
+      const fromSnapshot = { ...lastAppliedNativeSnapshot.value };
+      lastAppliedNativeSnapshot.value = { ...NEUTRAL_SNAPSHOT };
+      void animateNativeSnapshot(
+        fromSnapshot,
+        NEUTRAL_SNAPSHOT,
+        cueStyle.value,
+        PAUSE_TRANSITION_DURATION_MS
+      );
+      return;
+    }
+
+    const nextSnapshot = { ...effectiveSnapshot.value };
+    lastAppliedNativeSnapshot.value = nextSnapshot;
+    void animateNativeSnapshot(
+      NEUTRAL_SNAPSHOT,
+      nextSnapshot,
+      cueStyle.value,
+      PAUSE_TRANSITION_DURATION_MS
+    );
+  }
+);
 
 watch(
   resolvedBodyMatrix,

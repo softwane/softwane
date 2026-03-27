@@ -152,6 +152,7 @@ This section reflects the current repository state, not just the original intent
 - [x] Persist basic session preferences in local storage
 - [x] Add a preview slider for inspecting reminder intensity by remaining time
 - [x] Add a mock display-effect adapter in the Rust platform layer
+- [x] Add a macOS-native display backend using `Core Graphics` transfer tables as an acceptable fallback
 - [x] Verify `pnpm build`
 - [x] Verify `cargo test`
 
@@ -162,7 +163,8 @@ This section reflects the current repository state, not just the original intent
   - A true `Recovery -> Idle` flow is not implemented
 - [~] Visual effects exist in the app preview
   - Saturation, warmth, and grayscale are simulated in the UI
-  - System-wide display control is not implemented yet
+  - macOS now has a system-wide `Core Graphics` transfer-table fallback
+  - Windows and higher-fidelity native effect pipelines are still not implemented
 - [~] Settings exist, but only for part of the planned control surface
   - Work duration and pause timeout are configurable
   - Dynamic prewarm / evolution scaling exists in the engine, but it is not yet exposed as a user-tunable control
@@ -173,7 +175,6 @@ This section reflects the current repository state, not just the original intent
 ### 3.3 Not Done Yet
 
 - [ ] Implement a native Windows backend using the `Magnification API`
-- [ ] Implement a native macOS backend using `CGDisplaySetDisplayTransferFunction` or an acceptable fallback
 - [ ] Replace the mock platform adapter with real OS-specific display effect backends
 - [ ] Apply visual effects system-wide instead of only inside the app UI
 - [ ] Add tray / menu bar status presence
@@ -197,8 +198,8 @@ This section reflects the current repository state, not just the original intent
 - [x] Implement a basic session timer
 - [x] Implement pause, end-early, and reset controls
 - [x] Scale prewarm and evolution windows by session length with caps
-- [ ] Implement the real native display-effect pipeline
-- [ ] Move from preview-only visuals to actual system display control
+- [~] Implement the real native display-effect pipeline
+- [~] Move from preview-only visuals to actual system display control
 
 ### 4.2 Control Surface
 

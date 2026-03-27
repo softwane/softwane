@@ -4,6 +4,7 @@ const STORAGE_KEY = "erode.timer-session";
 const DEFAULT_PAUSE_TIMEOUT_MINUTES = 10;
 const MIN_SUPPORTED_WORK_DURATION_MINUTES = 2;
 const MAX_WORK_DURATION_MINUTES = 120;
+const DEFAULT_CUE_STYLE = "warm";
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -30,12 +31,25 @@ function formatClock(totalSeconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function normalizeCueStyle(value) {
+  switch (value) {
+    case "color":
+      return "dim";
+    case "dim":
+    case "warm":
+    case "full":
+      return value;
+    default:
+      return DEFAULT_CUE_STYLE;
+  }
+}
+
 export function useTimerSession() {
   const workDuration = ref(50);
   const workRemainingSeconds = ref(50 * 60);
   const autoResumeEnabled = ref(true);
   const pauseTimeoutMinutes = ref(DEFAULT_PAUSE_TIMEOUT_MINUTES);
-  const cueStyle = ref("warm");
+  const cueStyle = ref(DEFAULT_CUE_STYLE);
   const sessionStage = ref("Idle");
   const isPaused = ref(false);
   const pauseRemainingSeconds = ref(0);
@@ -118,7 +132,7 @@ export function useTimerSession() {
       }
 
       if (typeof saved.cueStyle === "string") {
-        cueStyle.value = saved.cueStyle;
+        cueStyle.value = normalizeCueStyle(saved.cueStyle);
       }
 
       if (typeof saved.autoResumeEnabled === "boolean") {
@@ -171,7 +185,7 @@ export function useTimerSession() {
   }
 
   function setCueStyle(value) {
-    cueStyle.value = value;
+    cueStyle.value = normalizeCueStyle(value);
   }
 
   function pauseSession() {
