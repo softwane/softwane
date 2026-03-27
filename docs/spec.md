@@ -155,6 +155,9 @@ This section reflects the current repository state, not just the original intent
 - [x] Add a macOS-native display backend using `Core Graphics` transfer tables as an acceptable fallback
 - [x] Verify `pnpm build`
 - [x] Verify `cargo test`
+- [x] Implement a native Windows backend using the `Magnification API`
+- [x] Replace the mock platform adapter with real OS-specific display effect backends
+- [x] Apply visual effects system-wide instead of only inside the app UI
 
 ### 3.2 Partially Done
 
@@ -164,7 +167,7 @@ This section reflects the current repository state, not just the original intent
 - [~] Visual effects exist in the app preview
   - Saturation, warmth, and grayscale are simulated in the UI
   - macOS now has a system-wide `Core Graphics` transfer-table fallback
-  - Windows and higher-fidelity native effect pipelines are still not implemented
+  - Windows now has a system-wide `Magnification API` fullscreen color-matrix backend
 - [~] Settings exist, but only for part of the planned control surface
   - Work duration and pause timeout are configurable
   - Dynamic prewarm / evolution scaling exists in the engine, but it is not yet exposed as a user-tunable control
@@ -174,9 +177,6 @@ This section reflects the current repository state, not just the original intent
 
 ### 3.3 Not Done Yet
 
-- [ ] Implement a native Windows backend using the `Magnification API`
-- [ ] Replace the mock platform adapter with real OS-specific display effect backends
-- [ ] Apply visual effects system-wide instead of only inside the app UI
 - [ ] Add tray / menu bar status presence
 - [ ] Add global hotkeys for pause, reset, and emergency actions
 - [ ] Add auto-launch support
@@ -198,8 +198,8 @@ This section reflects the current repository state, not just the original intent
 - [x] Implement a basic session timer
 - [x] Implement pause, end-early, and reset controls
 - [x] Scale prewarm and evolution windows by session length with caps
-- [~] Implement the real native display-effect pipeline
-- [~] Move from preview-only visuals to actual system display control
+- [x] Implement the real native display-effect pipeline
+- [x] Move from preview-only visuals to actual system display control
 
 ### 4.2 Control Surface
 
@@ -229,7 +229,7 @@ This section reflects the current repository state, not just the original intent
 - [x] Simulate warmth shift
 - [x] Simulate grayscale blending
 - [x] Use smooth cue blending when pausing and resuming
-- [ ] Match the same behavior through native OS display APIs
+- [~] Match the same behavior through native OS display APIs
 - [ ] Tune final effect values on real hardware
 
 ### 4.5 Reliability And Observability
@@ -259,5 +259,5 @@ This section reflects the current repository state, not just the original intent
 
 - [ ] Timer drift remains within `1 second` in real runtime conditions
 - [ ] Phase transitions do not flicker in the native implementation
-- [ ] Windows native backend works reliably
+- [~] Windows native backend works reliably
 - [ ] macOS native backend works reliably
