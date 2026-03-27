@@ -19,6 +19,11 @@ const endingEarlySnapshot = ref(null);
 const endingEarlyFrozenTime = ref("");
 const endingEarlyFrozenProgress = ref(0);
 const didFreezeProgressAtEarlyEnd = ref(false);
+const endingEarlyFrozenActionRow = ref({
+  showPause: false,
+  showEndEarly: false,
+  showReset: false
+});
 const bodyMatrixValues = ref(identityMatrix().map((value) => value.toFixed(6)).join(" "));
 let bodyMatrix = identityMatrix();
 let bodyMatrixFrame = null;
@@ -55,14 +60,12 @@ const {
   pauseTimeDisplay,
   pauseTimeoutMinutes,
   progress,
-  previewRemainingFractionalMinutes,
   resetSession,
   sessionSnapshot,
   sessionStage,
   sessionStatus,
   setSessionProgressPercent,
   setCueStyle,
-  setRemainingMinutes,
   statusLine,
   workDuration,
   pauseSession
@@ -77,7 +80,7 @@ const baseSnapshot = computed(() => {
     return { ...NEUTRAL_SNAPSHOT };
   }
 
-  return deriveLocalSnapshot(workDuration.value, previewRemainingFractionalMinutes.value);
+  return deriveLocalSnapshot(workDuration.value, workDuration.value);
 });
 
 const effectiveSnapshot = computed(() => {
@@ -173,6 +176,15 @@ const canPause = computed(
 const canEndEarly = computed(
   () => !isResetting.value && !isEndingEarly.value && sessionStage.value === "Work"
 );
+const showPauseButton = computed(() => (
+  isEndingEarly.value ? endingEarlyFrozenActionRow.value.showPause : canPause.value
+));
+const showEndEarlyButton = computed(() => (
+  isEndingEarly.value ? endingEarlyFrozenActionRow.value.showEndEarly : canEndEarly.value
+));
+const showResetButton = computed(() => (
+  isEndingEarly.value ? endingEarlyFrozenActionRow.value.showReset : hasActiveSession.value
+));
 const secondaryStatusLine = computed(() => {
   if (isResetting.value) {
     return "Returning to setup";
@@ -396,6 +408,11 @@ async function handleResetSession() {
   } finally {
     didFreezeProgressAtEarlyEnd.value = false;
     endingEarlyFrozenProgress.value = 0;
+    endingEarlyFrozenActionRow.value = {
+      showPause: false,
+      showEndEarly: false,
+      showReset: false
+    };
     isResetting.value = false;
   }
 }
@@ -406,6 +423,11 @@ function handleBeginSession() {
   }
 
   didFreezeProgressAtEarlyEnd.value = false;
+  endingEarlyFrozenActionRow.value = {
+    showPause: false,
+    showEndEarly: false,
+    showReset: false
+  };
   beginSession();
 }
 
@@ -415,6 +437,11 @@ async function handleEndSessionEarly() {
   }
 
   isEndingEarly.value = true;
+  endingEarlyFrozenActionRow.value = {
+    showPause: canPause.value,
+    showEndEarly: canEndEarly.value,
+    showReset: hasActiveSession.value
+  };
   endingEarlyFrozenTime.value = displayTime.value;
   endingEarlyFrozenProgress.value = progress.value;
   didFreezeProgressAtEarlyEnd.value = true;
@@ -423,6 +450,11 @@ async function handleEndSessionEarly() {
   await waitForMs(PAUSE_TRANSITION_DURATION_MS);
   endingEarlySnapshot.value = null;
   endingEarlyFrozenTime.value = "";
+  endingEarlyFrozenActionRow.value = {
+    showPause: false,
+    showEndEarly: false,
+    showReset: false
+  };
   isEndingEarly.value = false;
 }
 
@@ -506,29 +538,31 @@ onUnmounted(() => {
 
       <section class="action-row">
         <button
-          v-if="canPause"
+          v-if="showPauseButton"
           key="pause"
           class="action-button action-primary"
           type="button"
+          :disabled="isEndingEarly"
           @click="pauseSession"
         >
           {{ sessionStatus === "Paused" ? "Resume" : "Pause" }}
         </button>
         <button
-          v-if="canEndEarly"
+          v-if="showEndEarlyButton"
           key="end-early"
           class="action-button"
           type="button"
+          :disabled="isEndingEarly"
           @click="handleEndSessionEarly"
         >
           End early
         </button>
         <button
-          v-if="hasActiveSession"
+          v-if="showResetButton"
           key="reset"
           class="action-button"
           type="button"
-          :disabled="isResetting"
+          :disabled="isResetting || isEndingEarly"
           @click="handleResetSession"
         >
           Reset
@@ -608,18 +642,6 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <label class="field">
-          <span>Preview point</span>
-          <input
-            :value="remainingMinutes"
-            type="range"
-            min="0"
-            :max="Math.max(workDuration, 1)"
-            :disabled="hasActiveSession"
-            @input="setRemainingMinutes(Number($event.target.value))"
-          />
-        </label>
-        
         <label class="field">
           <span>
             <input v-model="autoResumeEnabled" type="checkbox" />
