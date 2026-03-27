@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import erodeMark from "./assets/erode-mark.svg";
 import { useTimerSession } from "./composables/useTimerSession";
-import { animateNativeSnapshot, applyNativeSnapshot, getPreviewSnapshot } from "./preview";
+import { deriveLocalSnapshot } from "./preview";
 
 const PAUSE_TRANSITION_DURATION_MS = 2800;
 const NEUTRAL_SNAPSHOT = Object.freeze({
@@ -17,14 +17,8 @@ const isEndingEarly = ref(false);
 const isResetting = ref(false);
 const endingEarlySnapshot = ref(null);
 const endingEarlyFrozenTime = ref("");
-const snapshot = ref({
-  phase: "Stable",
-  saturation: 1,
-  warmthKelvin: 6500,
-  grayscale: 0
-});
-const isCueTransitioning = ref(false);
-const lastAppliedNativeSnapshot = ref({ ...NEUTRAL_SNAPSHOT });
+const endingEarlyFrozenProgress = ref(0);
+const didFreezeProgressAtEarlyEnd = ref(false);
 const bodyMatrixValues = ref(identityMatrix().map((value) => value.toFixed(6)).join(" "));
 let bodyMatrix = identityMatrix();
 let bodyMatrixFrame = null;
@@ -54,6 +48,8 @@ const {
   displayTime,
   endSessionEarly,
   hasActiveSession,
+  isCueTransitioning: sessionIsCueTransitioning,
+  isEarlyEnding: sessionIsEarlyEnding,
   isCueSuppressed,
   isWorkDurationSupported,
   pauseTimeDisplay,
@@ -61,8 +57,10 @@ const {
   progress,
   previewRemainingFractionalMinutes,
   resetSession,
+  sessionSnapshot,
   sessionStage,
   sessionStatus,
+  setSessionProgressPercent,
   setCueStyle,
   setRemainingMinutes,
   statusLine,
@@ -70,17 +68,17 @@ const {
   pauseSession
 } = useTimerSession();
 
-const progressPercent = computed(() => clamp(progress.value * 100, 0, 100));
-
-function handleProgressScrub(value) {
-  if (sessionStage.value !== "Work") {
-    return;
+const baseSnapshot = computed(() => {
+  if (hasActiveSession.value) {
+    return sessionSnapshot.value;
   }
 
-  const clampedPercent = clamp(value, 0, 100);
-  const remainingMinutes = (1 - clampedPercent / 100) * Math.max(workDuration.value, 0);
-  setRemainingMinutes(remainingMinutes);
-}
+  if (!isWorkDurationSupported.value) {
+    return { ...NEUTRAL_SNAPSHOT };
+  }
+
+  return deriveLocalSnapshot(workDuration.value, previewRemainingFractionalMinutes.value);
+});
 
 const effectiveSnapshot = computed(() => {
   if (isEndingEarly.value && endingEarlySnapshot.value) {
@@ -89,12 +87,12 @@ const effectiveSnapshot = computed(() => {
 
   if (sessionStage.value === "Break") {
     return {
-      ...snapshot.value,
+      ...baseSnapshot.value,
       phase: "Statue"
     };
   }
 
-  return snapshot.value;
+  return baseSnapshot.value;
 });
 
 const phaseTone = computed(() => {
@@ -129,6 +127,10 @@ const displayStatusLabel = computed(() => {
     return "Settled";
   }
 
+  if (sessionStatus.value === "EndingEarly" || sessionIsEarlyEnding.value) {
+    return "Settling";
+  }
+
   return statusLine.value;
 });
 
@@ -137,9 +139,26 @@ const visualDisplayTime = computed(() => (
   isEndingEarly.value ? endingEarlyFrozenTime.value : displayTime.value
 ));
 
+const visualProgress = computed(() => {
+  if (isEndingEarly.value || didFreezeProgressAtEarlyEnd.value) {
+    return endingEarlyFrozenProgress.value;
+  }
+
+  return progress.value;
+});
+
+const progressPercent = computed(() => clamp(visualProgress.value * 100, 0, 100));
+
 const progressStyle = computed(() => ({
-  transform: `scaleX(${progress.value})`
+  transform: `scaleX(${visualProgress.value})`
 }));
+const showProgressScrubber = computed(
+  () =>
+    sessionStage.value === "Work" &&
+    sessionStatus.value === "Running" &&
+    !isEndingEarly.value &&
+    !sessionIsEarlyEnding.value
+);
 
 const isStartLayerOpen = computed(() => !hasActiveSession.value);
 const isCueEnabled = computed(
@@ -163,18 +182,31 @@ const secondaryStatusLine = computed(() => {
     return "Ending gently";
   }
 
+  if (sessionStatus.value === "EndingEarly" || sessionIsEarlyEnding.value) {
+    return "Ending gently";
+  }
+
   if (sessionStatus.value === "Paused") {
     return autoResumeEnabled.value
       ? `Silently resumes in ${pauseTimeDisplay.value}`
       : "Paused until you resume";
   }
 
-  if (isCueTransitioning.value) {
-    return "Transitioning gently";
-  }
-
   return "";
 });
+
+function handleProgressScrub(value) {
+  if (
+    sessionStage.value !== "Work" ||
+    sessionStatus.value !== "Running" ||
+    isEndingEarly.value ||
+    sessionIsEarlyEnding.value
+  ) {
+    return;
+  }
+
+  void setSessionProgressPercent(value);
+}
 const workDurationMessage = computed(() => {
   if (isWorkDurationSupported.value) {
     return "";
@@ -322,11 +354,9 @@ function animateBodyMatrix(targetMatrix, durationMs) {
 
   if (distance < 0.0001) {
     updateBodyMatrixValues(targetMatrix);
-    isCueTransitioning.value = false;
     return;
   }
 
-  isCueTransitioning.value = true;
   const startedAt = window.performance.now();
 
   const tick = (now) => {
@@ -341,7 +371,6 @@ function animateBodyMatrix(targetMatrix, durationMs) {
 
     updateBodyMatrixValues(targetMatrix);
     bodyMatrixFrame = null;
-    isCueTransitioning.value = false;
   };
 
   bodyMatrixFrame = window.requestAnimationFrame(tick);
@@ -361,20 +390,12 @@ async function handleResetSession() {
   isSettingsOpen.value = false;
   isResetting.value = true;
 
-  const fromSnapshot = {
-    ...effectiveSnapshot.value
-  };
-
   try {
-    await animateNativeSnapshot(
-      fromSnapshot,
-      NEUTRAL_SNAPSHOT,
-      cueStyle.value,
-      PAUSE_TRANSITION_DURATION_MS
-    );
+    await resetSession();
+    await waitForMs(PAUSE_TRANSITION_DURATION_MS);
   } finally {
-    lastAppliedNativeSnapshot.value = { ...NEUTRAL_SNAPSHOT };
-    resetSession();
+    didFreezeProgressAtEarlyEnd.value = false;
+    endingEarlyFrozenProgress.value = 0;
     isResetting.value = false;
   }
 }
@@ -384,6 +405,7 @@ function handleBeginSession() {
     return;
   }
 
+  didFreezeProgressAtEarlyEnd.value = false;
   beginSession();
 }
 
@@ -392,92 +414,39 @@ async function handleEndSessionEarly() {
     return;
   }
 
-  const payload = await getPreviewSnapshot(workDuration.value, 0, cueStyle.value);
   isEndingEarly.value = true;
   endingEarlyFrozenTime.value = displayTime.value;
-  endingEarlySnapshot.value = payload.snapshot;
-  lastAppliedNativeSnapshot.value = { ...payload.snapshot };
-  endSessionEarly();
+  endingEarlyFrozenProgress.value = progress.value;
+  didFreezeProgressAtEarlyEnd.value = true;
+  endingEarlySnapshot.value = deriveLocalSnapshot(workDuration.value, 0);
+  await endSessionEarly();
   await waitForMs(PAUSE_TRANSITION_DURATION_MS);
   endingEarlySnapshot.value = null;
   endingEarlyFrozenTime.value = "";
   isEndingEarly.value = false;
 }
 
-async function refreshPreview() {
-  if (!hasActiveSession.value && !isWorkDurationSupported.value) {
-    snapshot.value = { ...NEUTRAL_SNAPSHOT };
-    return;
-  }
-
-  const payload = await getPreviewSnapshot(
-    workDuration.value,
-    previewRemainingFractionalMinutes.value,
-    cueStyle.value
-  );
-  snapshot.value = payload.snapshot;
-
-  if (isCueEnabled.value) {
-    lastAppliedNativeSnapshot.value = { ...payload.snapshot };
-  }
-}
-
-watch([previewRemainingFractionalMinutes, sessionStage, workDuration, cueStyle], () => {
-  void refreshPreview();
-});
-
-watch(
-  cueStyle,
-  () => {
-    if (!hasActiveSession.value || isCueSuppressed.value || isResetting.value) {
-      return;
-    }
-
-    void applyNativeSnapshot(effectiveSnapshot.value, cueStyle.value);
-  }
-);
-
-watch(
-  isCueEnabled,
-  (enabled, wasEnabled) => {
-    if (isResetting.value || enabled === wasEnabled) {
-      return;
-    }
-
-    if (!enabled) {
-      const fromSnapshot = { ...lastAppliedNativeSnapshot.value };
-      lastAppliedNativeSnapshot.value = { ...NEUTRAL_SNAPSHOT };
-      void animateNativeSnapshot(
-        fromSnapshot,
-        NEUTRAL_SNAPSHOT,
-        cueStyle.value,
-        PAUSE_TRANSITION_DURATION_MS
-      );
-      return;
-    }
-
-    const nextSnapshot = { ...effectiveSnapshot.value };
-    lastAppliedNativeSnapshot.value = nextSnapshot;
-    void animateNativeSnapshot(
-      NEUTRAL_SNAPSHOT,
-      nextSnapshot,
-      cueStyle.value,
-      PAUSE_TRANSITION_DURATION_MS
-    );
-  }
-);
-
 watch(
   resolvedBodyMatrix,
   (matrix) => {
-    animateBodyMatrix(matrix, PAUSE_TRANSITION_DURATION_MS);
+    if (sessionIsCueTransitioning.value) {
+      animateBodyMatrix(matrix, 45);
+      return;
+    }
+
+    const isLiveWorkCue =
+      hasActiveSession.value &&
+      sessionStatus.value === "Running" &&
+      !isEndingEarly.value &&
+      !sessionIsEarlyEnding.value;
+    const durationMs = isLiveWorkCue ? 300 : PAUSE_TRANSITION_DURATION_MS;
+    animateBodyMatrix(matrix, durationMs);
   },
   { immediate: true }
 );
 
 onMounted(() => {
   document.body.style.filter = "url(#erode-color-filter)";
-  void refreshPreview();
 });
 
 onUnmounted(() => {
@@ -523,19 +492,19 @@ onUnmounted(() => {
           <div class="progress-fill" :style="progressStyle"></div>
         </div>
         <input
+          v-if="showProgressScrubber"
           class="progress-scrubber"
           type="range"
           min="0"
           max="100"
           step="0.1"
           :value="progressPercent"
-          :disabled="sessionStage !== 'Work'"
           aria-label="Session progress"
           @input="handleProgressScrub(Number($event.target.value))"
         />
       </section>
 
-      <TransitionGroup name="action-pill" tag="section" class="action-row">
+      <section class="action-row">
         <button
           v-if="canPause"
           key="pause"
@@ -564,7 +533,7 @@ onUnmounted(() => {
         >
           Reset
         </button>
-      </TransitionGroup>
+      </section>
     </section>
 
     <section
@@ -639,6 +608,18 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <label class="field">
+          <span>Preview point</span>
+          <input
+            :value="remainingMinutes"
+            type="range"
+            min="0"
+            :max="Math.max(workDuration, 1)"
+            :disabled="hasActiveSession"
+            @input="setRemainingMinutes(Number($event.target.value))"
+          />
+        </label>
+        
         <label class="field">
           <span>
             <input v-model="autoResumeEnabled" type="checkbox" />

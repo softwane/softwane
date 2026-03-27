@@ -1,10 +1,16 @@
+import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { deriveLocalSnapshot } from "../preview";
 
 const STORAGE_KEY = "erode.timer-session";
+const SESSION_EVENT = "timer-session-updated";
+const DEFAULT_WORK_DURATION_MINUTES = 50;
 const DEFAULT_PAUSE_TIMEOUT_MINUTES = 10;
 const MIN_SUPPORTED_WORK_DURATION_MINUTES = 2;
 const MAX_WORK_DURATION_MINUTES = 120;
 const DEFAULT_CUE_STYLE = "warm";
+const FALLBACK_TICK_MS = 250;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -12,7 +18,7 @@ function clamp(value, min, max) {
 
 function clampDurationForStorage(value) {
   if (!Number.isFinite(value)) {
-    return 50;
+    return DEFAULT_WORK_DURATION_MINUTES;
   }
 
   return clamp(value, 0, MAX_WORK_DURATION_MINUTES);
@@ -44,17 +50,75 @@ function normalizeCueStyle(value) {
   }
 }
 
+function hasTauriRuntime() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+function neutralSnapshot() {
+  return {
+    phase: "Stable",
+    saturation: 1,
+    warmthKelvin: 6500,
+    grayscale: 0
+  };
+}
+
+function normalizeSnapshot(snapshot) {
+  if (!snapshot) {
+    return neutralSnapshot();
+  }
+
+  const phaseMap = {
+    stable: "Stable",
+    jnd: "JND",
+    evolution: "Evolution",
+    statue: "Statue",
+    recovery: "Recovery"
+  };
+  const normalizedPhase = String(snapshot.phase ?? "")
+    .trim()
+    .toLowerCase();
+
+  return {
+    phase: phaseMap[normalizedPhase] ?? snapshot.phase ?? "Stable",
+    saturation: snapshot.saturation ?? 1,
+    warmthKelvin: snapshot.warmthKelvin ?? snapshot.warmth_kelvin ?? 6500,
+    grayscale: snapshot.grayscale ?? 0
+  };
+}
+
+function nowMs() {
+  return Date.now();
+}
+
+function ceilSeconds(durationMs) {
+  if (durationMs <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(durationMs / 1000);
+}
+
 export function useTimerSession() {
-  const workDuration = ref(50);
-  const workRemainingSeconds = ref(50 * 60);
+  const workDuration = ref(DEFAULT_WORK_DURATION_MINUTES);
   const autoResumeEnabled = ref(true);
   const pauseTimeoutMinutes = ref(DEFAULT_PAUSE_TIMEOUT_MINUTES);
   const cueStyle = ref(DEFAULT_CUE_STYLE);
   const sessionStage = ref("Idle");
-  const isPaused = ref(false);
+  const sessionStatus = ref("Idle");
+  const sessionRemainingSeconds = ref(DEFAULT_WORK_DURATION_MINUTES * 60);
   const pauseRemainingSeconds = ref(0);
-  let pauseResumeAt = null;
-  let tickHandle = null;
+  const isEarlyEnding = ref(false);
+  const isCueTransitioning = ref(false);
+  const sessionSnapshot = ref(neutralSnapshot());
+  const previewPointMinutes = ref(DEFAULT_WORK_DURATION_MINUTES);
+  let unlistenSession = null;
+  let isApplyingBackendState = false;
+
+  let fallbackTickHandle = null;
+  let fallbackWorkEndAt = null;
+  let fallbackPausedRemainingMs = 0;
+  let fallbackPauseResumeAt = null;
 
   const hasActiveSession = computed(() => sessionStage.value !== "Idle");
   const isWorkDurationSupported = computed(
@@ -62,35 +126,35 @@ export function useTimerSession() {
   );
   const currentSeconds = computed(() => {
     if (sessionStage.value === "Work") {
-      return workRemainingSeconds.value;
+      return sessionRemainingSeconds.value;
     }
 
     if (sessionStage.value === "Break") {
       return 0;
     }
 
-    return workDuration.value * 60;
+    return Math.max(workDuration.value, 0) * 60;
   });
   const displayTime = computed(() => formatClock(currentSeconds.value));
   const remainingSeconds = computed(() => currentSeconds.value);
-  const remainingMinutes = computed(() => Math.ceil(currentSeconds.value / 60));
-  const workRemainingMinutes = computed(() => Math.ceil(workRemainingSeconds.value / 60));
-  const workRemainingFractionalMinutes = computed(() => workRemainingSeconds.value / 60);
+  const remainingMinutes = computed(() => {
+    if (hasActiveSession.value) {
+      return Math.ceil(currentSeconds.value / 60);
+    }
+
+    return Math.ceil(previewPointMinutes.value);
+  });
   const previewRemainingFractionalMinutes = computed(() => {
-    if (sessionStage.value === "Work") {
-      return workRemainingFractionalMinutes.value;
+    if (hasActiveSession.value) {
+      return currentSeconds.value / 60;
     }
 
-    if (sessionStage.value === "Break") {
-      return 0;
-    }
-
-    return workDuration.value;
+    return previewPointMinutes.value;
   });
   const progress = computed(() => {
     if (sessionStage.value === "Work") {
       const total = Math.max(workDuration.value * 60, 1);
-      return Math.max(0, Math.min(1, (total - workRemainingSeconds.value) / total));
+      return Math.max(0, Math.min(1, (total - sessionRemainingSeconds.value) / total));
     }
 
     if (sessionStage.value === "Break") {
@@ -99,28 +163,15 @@ export function useTimerSession() {
 
     return 0;
   });
-  const sessionStatus = computed(() => {
-    if (isPaused.value) {
-      return "Paused";
-    }
-
-    switch (sessionStage.value) {
-      case "Work":
-        return "Running";
-      case "Break":
-        return "Break";
-      default:
-        return "Idle";
-    }
-  });
   const statusLine = computed(() => sessionStatus.value.toLowerCase());
-  const isCueSuppressed = computed(() => isPaused.value || sessionStage.value === "Idle");
+  const isCueSuppressed = computed(() => sessionStatus.value === "Paused" || sessionStage.value === "Idle");
   const pauseTimeDisplay = computed(() => formatClock(pauseRemainingSeconds.value));
 
   function hydrateFromStorage() {
     const raw = window.localStorage.getItem(STORAGE_KEY);
 
     if (!raw) {
+      previewPointMinutes.value = workDuration.value;
       return;
     }
 
@@ -145,6 +196,8 @@ export function useTimerSession() {
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
     }
+
+    previewPointMinutes.value = workDuration.value;
   }
 
   function persistSessionConfig() {
@@ -159,155 +212,324 @@ export function useTimerSession() {
     );
   }
 
-  function resetWorkTimeline() {
-    workRemainingSeconds.value = Math.max(workDuration.value, 0) * 60;
-  }
-
-  function beginSession() {
-    if (!isWorkDurationSupported.value) {
-      return false;
-    }
-
-    resetWorkTimeline();
-    sessionStage.value = "Work";
-    isPaused.value = false;
-    pauseRemainingSeconds.value = 0;
-    pauseResumeAt = null;
-    return true;
-  }
-
-  function enterBreak() {
-    workRemainingSeconds.value = 0;
-    sessionStage.value = "Break";
-    isPaused.value = false;
-    pauseRemainingSeconds.value = 0;
-    pauseResumeAt = null;
-  }
-
   function setCueStyle(value) {
     cueStyle.value = normalizeCueStyle(value);
   }
 
-  function pauseSession() {
-    if (sessionStage.value !== "Work" && !isPaused.value) {
-      return;
-    }
-
-    if (isPaused.value) {
-      isPaused.value = false;
-      pauseRemainingSeconds.value = 0;
-      pauseResumeAt = null;
-      return;
-    }
-
-    isPaused.value = true;
-    pauseResumeAt = autoResumeEnabled.value
-      ? Date.now() + pauseTimeoutMinutes.value * 60 * 1000
-      : null;
-    syncPauseCountdown();
-  }
-
-  function resetSession() {
-    resetWorkTimeline();
-    sessionStage.value = "Idle";
-    isPaused.value = false;
-    pauseRemainingSeconds.value = 0;
-    pauseResumeAt = null;
-  }
-
-  function endSessionEarly() {
-    if (sessionStage.value === "Work") {
-      enterBreak();
-    }
-  }
-
   function setRemainingMinutes(value) {
-    workRemainingSeconds.value = clamp(value * 60, 0, Math.max(workDuration.value, 0) * 60);
+    previewPointMinutes.value = clamp(value, 0, Math.max(workDuration.value, 0));
   }
 
-  function syncPauseCountdown() {
-    if (!pauseResumeAt) {
-      pauseRemainingSeconds.value = 0;
+  function applySessionPayload(payload) {
+    if (!payload) {
       return;
     }
 
-    pauseRemainingSeconds.value = Math.max(0, Math.ceil((pauseResumeAt - Date.now()) / 1000));
+    isApplyingBackendState = true;
+    sessionStage.value = payload.sessionStage ?? "Idle";
+    sessionStatus.value = payload.sessionStatus ?? "Idle";
+    sessionRemainingSeconds.value = payload.remainingSeconds ?? 0;
+    pauseRemainingSeconds.value = payload.pauseRemainingSeconds ?? 0;
+    isEarlyEnding.value = Boolean(payload.isEarlyEnding);
+    isCueTransitioning.value = Boolean(payload.isCueTransitioning);
+    sessionSnapshot.value = normalizeSnapshot(payload.snapshot);
+
+    if (payload.sessionStage !== "Idle" && typeof payload.workDurationMinutes === "number") {
+      workDuration.value = clampDurationForStorage(payload.workDurationMinutes);
+    }
+
+    isApplyingBackendState = false;
   }
 
-  function tickWorkTimeline() {
-    if (workRemainingSeconds.value > 0) {
-      workRemainingSeconds.value -= 1;
+  async function invokeSession(command, payload = {}) {
+    if (!hasTauriRuntime()) {
+      return null;
     }
 
-    if (workRemainingSeconds.value <= 0) {
-      workRemainingSeconds.value = 0;
-      enterBreak();
+    try {
+      return await invoke(command, payload);
+    } catch {
+      return null;
     }
   }
 
-  function startTimer() {
-    if (tickHandle) {
-      clearInterval(tickHandle);
+  async function syncSessionState() {
+    const payload = await invokeSession("get_timer_session_state");
+    applySessionPayload(payload);
+  }
+
+  async function beginSession() {
+    if (!isWorkDurationSupported.value) {
+      return false;
     }
 
-    tickHandle = window.setInterval(() => {
-      if (sessionStage.value === "Idle") {
+    if (!hasTauriRuntime()) {
+      beginFallbackSession();
+      return true;
+    }
+
+    const payload = await invokeSession("start_timer_session", {
+      workDurationMinutes: clampDurationForStorage(workDuration.value),
+      cueStyle: cueStyle.value,
+      autoResumeEnabled: autoResumeEnabled.value,
+      pauseTimeoutMinutes: pauseTimeoutMinutes.value
+    });
+
+    applySessionPayload(payload);
+    return payload?.sessionStage === "Work";
+  }
+
+  async function pauseSession() {
+    if (!hasTauriRuntime()) {
+      toggleFallbackPause();
+      return;
+    }
+
+    const payload = await invokeSession("toggle_pause_timer_session", {
+      autoResumeEnabled: autoResumeEnabled.value,
+      pauseTimeoutMinutes: pauseTimeoutMinutes.value
+    });
+
+    applySessionPayload(payload);
+  }
+
+  async function resetSession() {
+    if (!hasTauriRuntime()) {
+      resetFallbackSession();
+      return;
+    }
+
+    const payload = await invokeSession("reset_timer_session");
+    applySessionPayload(payload);
+  }
+
+  async function endSessionEarly() {
+    if (!hasTauriRuntime()) {
+      endFallbackSessionEarly();
+      return;
+    }
+
+    const payload = await invokeSession("end_timer_session_early");
+    applySessionPayload(payload);
+  }
+
+  async function syncActiveSessionSettings() {
+    if (isApplyingBackendState || !hasActiveSession.value || !hasTauriRuntime()) {
+      return;
+    }
+
+    const payload = await invokeSession("update_timer_session_settings", {
+      cueStyle: cueStyle.value,
+      autoResumeEnabled: autoResumeEnabled.value,
+      pauseTimeoutMinutes: pauseTimeoutMinutes.value
+    });
+
+    applySessionPayload(payload);
+  }
+
+  async function setSessionProgressPercent(value) {
+    const clampedPercent = clamp(value, 0, 100);
+    const remainingSeconds = Math.round((1 - clampedPercent / 100) * Math.max(workDuration.value, 0) * 60);
+
+    if (!hasTauriRuntime()) {
+      if (sessionStage.value !== "Work" || sessionStatus.value !== "Running" || isEarlyEnding.value) {
         return;
       }
 
-      if (isPaused.value) {
-        syncPauseCountdown();
+      fallbackWorkEndAt = nowMs() + remainingSeconds * 1_000;
+      syncFallbackSession();
+      return;
+    }
 
-        if (autoResumeEnabled.value && pauseRemainingSeconds.value <= 0) {
-          isPaused.value = false;
-          pauseRemainingSeconds.value = 0;
-          pauseResumeAt = null;
+    const payload = await invokeSession("set_timer_session_remaining_seconds", {
+      remainingSeconds
+    });
+
+    applySessionPayload(payload);
+  }
+
+  function syncFallbackSession() {
+    if (sessionStage.value === "Idle") {
+      sessionStatus.value = "Idle";
+      sessionRemainingSeconds.value = workDuration.value * 60;
+      pauseRemainingSeconds.value = 0;
+      isEarlyEnding.value = false;
+      isCueTransitioning.value = false;
+      sessionSnapshot.value = neutralSnapshot();
+      return;
+    }
+
+    if (sessionStage.value === "Break") {
+      sessionStatus.value = "Break";
+      sessionRemainingSeconds.value = 0;
+      pauseRemainingSeconds.value = 0;
+      isEarlyEnding.value = false;
+      isCueTransitioning.value = false;
+      sessionSnapshot.value = deriveLocalSnapshot(workDuration.value, 0);
+      return;
+    }
+
+    if (sessionStatus.value === "Paused") {
+      if (autoResumeEnabled.value && fallbackPauseResumeAt) {
+        const pauseRemainingMs = Math.max(0, fallbackPauseResumeAt - nowMs());
+        pauseRemainingSeconds.value = ceilSeconds(pauseRemainingMs);
+
+        if (pauseRemainingMs <= 0) {
+          sessionStatus.value = "Running";
+          fallbackWorkEndAt = nowMs() + fallbackPausedRemainingMs;
+          fallbackPauseResumeAt = null;
         }
-
-        return;
+      } else {
+        pauseRemainingSeconds.value = 0;
       }
 
-      if (sessionStage.value === "Work") {
-        tickWorkTimeline();
-        return;
-      }
-    }, 1000);
+      sessionRemainingSeconds.value = ceilSeconds(fallbackPausedRemainingMs);
+      sessionSnapshot.value = neutralSnapshot();
+      return;
+    }
+
+    const remainingMs = Math.max(0, (fallbackWorkEndAt ?? nowMs()) - nowMs());
+    sessionRemainingSeconds.value = ceilSeconds(remainingMs);
+    pauseRemainingSeconds.value = 0;
+    isEarlyEnding.value = false;
+    isCueTransitioning.value = false;
+    sessionSnapshot.value = deriveLocalSnapshot(workDuration.value, remainingMs / 60_000);
+
+    if (remainingMs <= 0) {
+      sessionStage.value = "Break";
+      sessionStatus.value = "Break";
+      sessionRemainingSeconds.value = 0;
+      sessionSnapshot.value = deriveLocalSnapshot(workDuration.value, 0);
+    }
   }
 
-  onMounted(() => {
+  function ensureFallbackTicker() {
+    if (fallbackTickHandle) {
+      return;
+    }
+
+    fallbackTickHandle = window.setInterval(() => {
+      syncFallbackSession();
+    }, FALLBACK_TICK_MS);
+  }
+
+  function beginFallbackSession() {
+    sessionStage.value = "Work";
+    sessionStatus.value = "Running";
+    fallbackPausedRemainingMs = 0;
+    fallbackPauseResumeAt = null;
+    fallbackWorkEndAt = nowMs() + clampDurationForStorage(workDuration.value) * 60_000;
+    syncFallbackSession();
+    ensureFallbackTicker();
+  }
+
+  function toggleFallbackPause() {
+    if (sessionStage.value !== "Work" && sessionStatus.value !== "Paused") {
+      return;
+    }
+
+    if (sessionStatus.value === "Paused") {
+      sessionStatus.value = "Running";
+      fallbackWorkEndAt = nowMs() + fallbackPausedRemainingMs;
+      fallbackPauseResumeAt = null;
+      syncFallbackSession();
+      return;
+    }
+
+    fallbackPausedRemainingMs = Math.max(0, (fallbackWorkEndAt ?? nowMs()) - nowMs());
+
+    if (fallbackPausedRemainingMs <= 0) {
+      endFallbackSessionEarly();
+      return;
+    }
+
+    sessionStatus.value = "Paused";
+    fallbackWorkEndAt = null;
+    fallbackPauseResumeAt = autoResumeEnabled.value
+      ? nowMs() + clamp(pauseTimeoutMinutes.value, 1, 120) * 60_000
+      : null;
+    syncFallbackSession();
+  }
+
+  function resetFallbackSession() {
+    sessionStage.value = "Idle";
+    sessionStatus.value = "Idle";
+    fallbackWorkEndAt = null;
+    fallbackPausedRemainingMs = 0;
+    fallbackPauseResumeAt = null;
+    syncFallbackSession();
+  }
+
+  function endFallbackSessionEarly() {
+    sessionStage.value = "Break";
+    sessionStatus.value = "Break";
+    fallbackWorkEndAt = null;
+    fallbackPausedRemainingMs = 0;
+    fallbackPauseResumeAt = null;
+    syncFallbackSession();
+  }
+
+  onMounted(async () => {
     hydrateFromStorage();
-    resetWorkTimeline();
-    startTimer();
+
+    if (hasTauriRuntime()) {
+      unlistenSession = await listen(SESSION_EVENT, (event) => {
+        applySessionPayload(event.payload);
+      });
+
+      await syncSessionState();
+      return;
+    }
+
+    syncFallbackSession();
+    ensureFallbackTicker();
   });
 
   onUnmounted(() => {
-    if (tickHandle) {
-      clearInterval(tickHandle);
+    if (typeof unlistenSession === "function") {
+      unlistenSession();
+      unlistenSession = null;
+    }
+
+    if (fallbackTickHandle) {
+      clearInterval(fallbackTickHandle);
+      fallbackTickHandle = null;
     }
   });
 
   watch(workDuration, (value) => {
-    const safeDuration = Math.max(value, 0);
-    workRemainingSeconds.value = clamp(workRemainingSeconds.value, 0, safeDuration * 60);
-  });
+    const safeDuration = clampDurationForStorage(value);
 
-  watch(pauseTimeoutMinutes, (value) => {
-    pauseTimeoutMinutes.value = clamp(value, 1, 120);
+    if (safeDuration !== value) {
+      workDuration.value = safeDuration;
+      return;
+    }
 
-    if (isPaused.value && autoResumeEnabled.value) {
-      pauseResumeAt = Date.now() + pauseTimeoutMinutes.value * 60 * 1000;
-      syncPauseCountdown();
+    previewPointMinutes.value = clamp(previewPointMinutes.value, 0, safeDuration);
+
+    if (!hasActiveSession.value && !hasTauriRuntime()) {
+      syncFallbackSession();
     }
   });
 
-  watch(autoResumeEnabled, (value) => {
-    if (isPaused.value) {
-      pauseResumeAt = value ? Date.now() + pauseTimeoutMinutes.value * 60 * 1000 : null;
-      syncPauseCountdown();
+  watch([cueStyle, autoResumeEnabled, pauseTimeoutMinutes], () => {
+    if (isApplyingBackendState) {
+      return;
+    }
+
+    persistSessionConfig();
+    void syncActiveSessionSettings();
+
+    if (!hasTauriRuntime()) {
+      syncFallbackSession();
     }
   });
 
-  watch([workDuration, cueStyle, autoResumeEnabled, pauseTimeoutMinutes], () => {
+  watch(workDuration, () => {
+    if (isApplyingBackendState) {
+      return;
+    }
+
     persistSessionConfig();
   });
 
@@ -320,19 +542,23 @@ export function useTimerSession() {
     hasActiveSession,
     isCueSuppressed,
     isWorkDurationSupported,
+    pauseSession,
     pauseTimeDisplay,
     pauseTimeoutMinutes,
-    progress,
     previewRemainingFractionalMinutes,
+    progress,
     remainingMinutes,
     remainingSeconds,
     resetSession,
+    sessionSnapshot,
+    isEarlyEnding,
+    isCueTransitioning,
     sessionStage,
     sessionStatus,
+    setSessionProgressPercent,
     setCueStyle,
     setRemainingMinutes,
     statusLine,
-    workDuration,
-    pauseSession
+    workDuration
   };
 }

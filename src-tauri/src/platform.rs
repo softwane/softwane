@@ -9,7 +9,7 @@ pub struct ApplyResult {
     pub backend: &'static str,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CueStyle {
     Dim,
     Warm,

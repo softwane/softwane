@@ -11,7 +11,7 @@ pub enum Phase {
     Statue,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct EffectSnapshot {
     pub phase: Phase,
     pub saturation: f32,
