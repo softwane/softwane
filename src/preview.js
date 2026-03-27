@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 
+let activeAnimationId = 0;
+
+export function cancelNativeAnimation() {
+  activeAnimationId += 1;
+}
+
 function sigmoid(x, k = 10) {
   return 1 / (1 + Math.exp(-k * (x - 0.5)));
 }
@@ -82,6 +88,8 @@ function normalizeCommandSnapshot(snapshot) {
 }
 
 export async function applyNativeSnapshot(snapshot, cueStyle = "warm") {
+  cancelNativeAnimation();
+
   try {
     const applyResult = await invoke("apply_effect_snapshot", {
       phase: snapshot.phase,
@@ -105,12 +113,19 @@ export async function animateNativeSnapshot(fromSnapshot, toSnapshot, cueStyle =
     return applyNativeSnapshot(toSnapshot, cueStyle);
   }
 
+  activeAnimationId += 1;
+  const animationId = activeAnimationId;
+
   const startedAt = window.performance.now();
   let lastAppliedAt = 0;
   const minFrameGapMs = 80;
 
   return new Promise((resolve) => {
     const tick = async (now) => {
+      if (activeAnimationId !== animationId) {
+        return resolve({ cancelled: true });
+      }
+
       const progress = clamp((now - startedAt) / durationMs, 0, 1);
       const eased = progress * progress * (3 - 2 * progress);
       const snapshot = {
@@ -122,7 +137,21 @@ export async function animateNativeSnapshot(fromSnapshot, toSnapshot, cueStyle =
 
       if (progress >= 1 || now - lastAppliedAt >= minFrameGapMs) {
         lastAppliedAt = now;
-        await applyNativeSnapshot(snapshot, cueStyle);
+        try {
+          await invoke("apply_effect_snapshot", {
+            phase: snapshot.phase,
+            saturation: snapshot.saturation,
+            grayscale: snapshot.grayscale,
+            warmthKelvin: Math.round(snapshot.warmthKelvin),
+            cueStyle
+          });
+        } catch {
+          // ignore
+        }
+      }
+
+      if (activeAnimationId !== animationId) {
+        return resolve({ cancelled: true });
       }
 
       if (progress < 1) {
@@ -149,6 +178,8 @@ export async function animateNativeSnapshot(fromSnapshot, toSnapshot, cueStyle =
 }
 
 export async function getPreviewSnapshot(sessionDurationMinutes, remainingMinutes, cueStyle = "warm") {
+  cancelNativeAnimation();
+
   try {
     const payload = await invoke("preview_effect", {
       sessionDurationMinutes,
