@@ -563,6 +563,17 @@ mod windows {
         ]
     }
 
+    fn brightness_matrix(brightness: f32) -> [[f32; 5]; 5] {
+        let b = brightness.clamp(0.0, 1.0);
+        [
+            [b,   0.0, 0.0, 0.0, 0.0],
+            [0.0, b,   0.0, 0.0, 0.0],
+            [0.0, 0.0, b,   0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 1.0],
+        ]
+    }
+
     fn normalize_warmth(warmth_kelvin: u32) -> f32 {
         let neutral = 6500.0;
         let min = 2500.0;
@@ -573,6 +584,8 @@ mod windows {
     struct WindowsCueStyleModifiers {
         warmth: f32,
         saturation: f32,
+        brightness_warmth: f32,
+        min_brightness: f32,
     }
 
     impl CueStyle {
@@ -581,14 +594,20 @@ mod windows {
                 CueStyle::Dim => WindowsCueStyleModifiers {
                     warmth: 0.18,
                     saturation: 0.74,
+                    brightness_warmth: 0.14,
+                    min_brightness: 0.58,
                 },
                 CueStyle::Full => WindowsCueStyleModifiers {
                     warmth: 1.18,
                     saturation: 0.88,
+                    brightness_warmth: 0.07,
+                    min_brightness: 0.66,
                 },
                 CueStyle::Warm => WindowsCueStyleModifiers {
                     warmth: 0.9,
                     saturation: 0.97,
+                    brightness_warmth: 0.06,
+                    min_brightness: 0.74,
                 },
             }
         }
@@ -601,13 +620,21 @@ mod windows {
 
         let m = cue_style.modifiers_windows();
         let warmth = (normalize_warmth(snapshot.warmth_kelvin) * m.warmth).clamp(0.0, 1.0);
-        let saturation = (snapshot.saturation.clamp(0.0, 1.0) * m.saturation).clamp(0.0, 1.0);
+        // Smooth saturation modifier: sat_modifier(s) = m.saturation + (1 - m.saturation) * s
+        // At raw_sat=1.0 (neutral) the modifier equals 1.0; as saturation decreases it
+        // smoothly converges to m.saturation, matching the intended cue-style intensity
+        // at full erosion without any single-frame discontinuity at the neutral threshold.
+        let raw_sat = snapshot.saturation.clamp(0.0, 1.0);
+        let sat_modifier = m.saturation + (1.0 - m.saturation) * raw_sat;
+        let saturation = (raw_sat * sat_modifier).clamp(0.0, 1.0);
+        let brightness = (1.0 - warmth * m.brightness_warmth).clamp(m.min_brightness, 1.0);
 
         let ms = saturation_matrix(saturation);
         let mw = warmth_matrix(warmth);
+        let mb = brightness_matrix(brightness);
 
-        // v' = v * Ms * Mw
-        mul(ms, mw)
+        // v' = v * Ms * Mw * Mb
+        mul(mul(ms, mw), mb)
     }
 
     #[derive(Debug, thiserror::Error)]
