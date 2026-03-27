@@ -156,8 +156,16 @@ fn tick_session(
     let is_cue_transitioning = payload.is_cue_transitioning;
 
     if last_applied.as_ref() != Some(&next_effect) {
-        let applier = app_handle.state::<ManagedDisplayEffectApplier>();
-        apply_preview(applier, &next_effect.snapshot, next_effect.cue_style);
+        // MagSetFullscreenColorEffect (Windows Magnification API) requires the
+        // calling thread to run a Win32 message loop. Tokio worker threads do not
+        // have one, so we must dispatch to the main thread.
+        let snapshot = next_effect.snapshot.clone();
+        let cue_style = next_effect.cue_style;
+        let handle_for_apply = app_handle.clone();
+        let _ = app_handle.run_on_main_thread(move || {
+            let applier = handle_for_apply.state::<ManagedDisplayEffectApplier>();
+            apply_preview(applier, &snapshot, cue_style);
+        });
         *last_applied = Some(next_effect);
     }
 
