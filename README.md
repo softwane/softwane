@@ -4,6 +4,8 @@ Erode App is a non-intrusive rest reminder system based on progressive visual er
 
 The goal is simple: make "it is time to take a break" feel like an ambient environmental change rather than a forced interruption.
 
+The intended loop is also simple: the user notices the screen has visibly drifted, leaves to rest, and later comes back to press `Reset`. Erode does not try to manage the whole break lifecycle; it focuses on making the boundary perceptible.
+
 ## Repository Scope
 
 This repository currently contains:
@@ -11,6 +13,13 @@ This repository currently contains:
 - A desktop app scaffold built for `Tauri + Rust + Native OS APIs`
 - A Vue 3 preview UI for the reminder phases
 - A product and technical specification derived from the original concept document
+
+## Product Philosophy
+
+- Erode is an ambient cue, not a break workflow manager
+- The product's job is to make "it is time to leave the screen" perceptible without a popup
+- The core path is: `color shift becomes noticeable -> user leaves -> user returns later and presses Reset`
+- Because of that, the current product direction does not include a separate `Recovery` state
 
 ## Project Structure
 
@@ -129,18 +138,20 @@ Implemented:
 - Session configuration model
 - Phase model: `Stable`, `JND`, `Evolution`, `Statue`
 - Sigmoid-based transition curve
-- Mock display effect adapter
+- Real session timer and state machine with `Idle`, `Work`, `Paused`, and `Break`
+- Tray/menu bar presence with basic controls
+- Native shell progress feedback
 - macOS native display adapter using `Core Graphics` transfer tables as a system-wide fallback
+- Windows native display adapter using the `Magnification API`
 - Vue 3 preview UI
 - Product and technical spec
 
 Not implemented yet:
 
-- Windows `Magnification API` integration
-- Tray/menu bar behavior
 - Global hotkeys
 - Auto-launch
-- Explicit recovery flow after the user actually steps away
+- Cue-window and intensity tuning beyond the current defaults
+- Local observability and platform-failure reporting
 
 ## Verification Notes
 
@@ -184,7 +195,8 @@ pnpm tauri:dev
 
 ## Suggested Next Steps
 
-1. Implement the Windows proof of concept using `MagSetFullscreenColorEffect`
-2. Replace the mock display adapter with platform-specific backends
-3. Add tray controls and a real session timer
-4. Tune the transition parameters with manual visual testing
+1. Add global hotkeys for pause and reset
+2. Expose cue-window and intensity tuning beyond the current defaults
+3. Add local observability for transitions, user actions, and platform failures
+4. Tune the transition parameters with manual visual testing on real hardware
+

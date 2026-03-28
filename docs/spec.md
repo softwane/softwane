@@ -20,6 +20,8 @@ Erode App reframes a reminder from a discrete event into a progressive state. In
 - Use gradual visual degradation instead of sudden sensory spikes
 - Treat `gentleness` as a first-class interaction rule, not just a visual style
 - Make every state change feel like a fade or drift, never a snap or pop
+- Erode does not manage the user's break lifecycle; it only makes "it is time to leave the screen" perceptible
+- The intended loop is: `the visual cue becomes noticeable -> the user leaves -> the user later returns and manually resets`
 
 ### 1.4 Goals
 
@@ -44,24 +46,25 @@ Erode App reframes a reminder from a discrete event into a progressive state. In
 ### 1.7 Core Scenarios
 
 - A user runs a work session from `2` to `90` minutes and needs a gentle break cue
-- A user is presenting and needs an immediate pause or reset hotkey
+- A user notices the environment has drifted far enough and chooses to leave without being directly interrupted
 - A user wants a subtle "time to stop soon" signal instead of a modal notification
 
 ### 1.8 Product Principles
 
 - `Zero startle`: no sounds, flashing, or sudden high-contrast transitions
 - `Slow change`: use easing curves instead of linear shifts
-- `Reversible`: any reminder state must recover smoothly
+- `Reversible`: the user can always return the display to neutral with `Reset`
 - `Controllable`: the user must be able to pause, end the work phase early into rest, or reset
 - `Low presence`: the product should live mostly in the tray/menu bar, not in the workflow
 - `Gentle everywhere`: dialogs, overlays, control responses, and resets must enter and leave softly; no abrupt UI jumps are acceptable
+- `User-led rest`: Erode signals when to leave; it does not orchestrate recovery or detect when the user is ready to return
 
 ### 1.9 User Stories
 
 - As a person in deep focus, I want most of my work session to remain completely undisturbed, with cueing compressed toward the end.
 - As a user who hates popups, I want reminders to arrive through environmental change rather than direct interruption.
-- As a sensitive user, I want the display to recover gradually when I choose to stop, instead of snapping back instantly.
-- As a frequent presenter, I want a hotkey that can immediately pause or reset the effect.
+- As a user, I want the screen state itself to tell me when it is time to step away, so I can leave without being explicitly told to stop.
+- As a user returning from a break, I want one obvious reset action that restores the neutral state and lets me start fresh.
 
 ## 2. Experience Model
 
@@ -78,12 +81,11 @@ User-facing language should avoid hard internal terms. For example, `JND` should
 
 ### 2.2 State Machine
 
-`Idle -> Work(Stable/JND/Evolution) -> Break(Statue) -> Recovery -> Idle`
+`Idle -> Work(Stable/JND/Evolution) -> Break(Statue) -> Idle`
 
 Additional states:
 
 - `Paused`: the user disables all visual effects temporarily
-- `EmergencyReset`: the effect is terminated immediately and the session is frozen
 
 ### 2.3 Mathematical Model
 
@@ -127,7 +129,6 @@ This means:
 | evolution_cap_minutes | 5 |
 | pause_timeout_minutes | 10 |
 | target_warmth_kelvin | 2500 |
-| recovery_duration_seconds | 30 |
 
 ## 3. Build Status Summary
 
@@ -145,7 +146,7 @@ This section reflects the current repository state, not just the original intent
 - [x] Support `Pause` and `Resume`
 - [x] Support `End early`
 - [x] Support `Reset`
-- [x] Keep the work-session clock advancing while paused
+- [x] Freeze the work-session clock while paused and show a separate auto-resume countdown when enabled
 - [x] Support pause timeout with automatic resume
 - [x] Add smooth visual ramping when cue visibility is suppressed and restored
 - [x] Add a settings surface for work duration, cue style, and pause timeout
@@ -158,32 +159,36 @@ This section reflects the current repository state, not just the original intent
 - [x] Implement a native Windows backend using the `Magnification API`
 - [x] Replace the mock platform adapter with real OS-specific display effect backends
 - [x] Apply visual effects system-wide instead of only inside the app UI
+- [x] Add a tray / menu bar presence with `Show Window`, `Pause/Resume`, `Reset`, and `Quit`
+- [x] Reflect session state in native shell UI through tray title and window progress bar
+- [x] Support live session scrubbing by setting remaining time from the UI progress control
+- [x] Add a smoothed early-end transition that settles into `Break`
 
 ### 3.2 Partially Done
 
-- [~] Recovery behavior is only partially represented
-  - `Break / Statue` exists
-  - A true `Recovery -> Idle` flow is not implemented
 - [~] Visual effects exist in the app preview
   - Saturation, warmth, and grayscale are simulated in the UI
   - macOS now has a system-wide `Core Graphics` transfer-table fallback
   - Windows now has a system-wide `Magnification API` fullscreen color-matrix backend
 - [~] Settings exist, but only for part of the planned control surface
   - Work duration and pause timeout are configurable
+  - Cue style presets `Dim fade`, `Warm drift`, and `Full erosion` are configurable
   - Dynamic prewarm / evolution scaling exists in the engine, but it is not yet exposed as a user-tunable control
   - Hotkeys, loops, auto-launch, and deeper intensity tuning are not exposed yet
-- [~] The product currently behaves like a focused preview app
-  - The low-presence tray/menu bar product shape is still missing
+- [~] The product now has native shell integration, but it still behaves primarily like a foreground window app
+  - Tray / menu bar controls exist
+  - The tray does not yet cover the full product control surface
+  - The main experience still depends on opening the window for setup and deeper control
+- [~] Session modeling goes beyond the original `Idle / Work / Paused / Break` simplification
+  - `Paused` and `EndingEarly` currently exist as work-session statuses rather than top-level stages
+  - The product intentionally does not model `Recovery` or `EmergencyReset` as distinct states
 
 ### 3.3 Not Done Yet
 
-- [ ] Add tray / menu bar status presence
-- [ ] Add global hotkeys for pause, reset, and emergency actions
+- [ ] Add global hotkeys for pause and reset
 - [ ] Add auto-launch support
 - [ ] Expose cue-window and intensity tuning beyond the current defaults
 - [ ] Add configurable loop behavior
-- [ ] Add a real `Recovery` state with smooth transition back to neutral
-- [ ] Add an explicit user action or leave-desk signal to start recovery
 - [ ] Add local observability logs for transitions, user actions, config snapshots, and platform failures
 - [ ] Add platform-failure handling and recovery-failure reporting
 - [ ] Validate timer drift and transition smoothness under real desktop runtime conditions
@@ -208,8 +213,10 @@ This section reflects the current repository state, not just the original intent
 - [x] Expose work duration control
 - [x] Expose pause timeout control
 - [x] Expose cue-style presets
+- [x] Add progress feedback in native shell UI
+- [x] Add basic tray / menu bar controls
+- [x] Allow live scrubbing of remaining time from the UI
 - [ ] Expose cue-window tuning controls
-- [ ] Add tray / menu bar controls
 - [ ] Add hotkey configuration
 - [ ] Add auto-launch configuration
 
@@ -217,10 +224,9 @@ This section reflects the current repository state, not just the original intent
 
 - [x] Support `Idle`
 - [x] Support `Work`
-- [x] Support `Paused`
+- [x] Support `Paused` as a work-session status
 - [x] Support `Break`
-- [ ] Support `Recovery`
-- [ ] Support `EmergencyReset` as a real distinct state
+- [x] Support `EndingEarly` as a transitional work-session status
 - [ ] Support session loops
 
 ### 4.4 Visual Behavior
@@ -229,15 +235,20 @@ This section reflects the current repository state, not just the original intent
 - [x] Simulate warmth shift
 - [x] Simulate grayscale blending
 - [x] Use smooth cue blending when pausing and resuming
+- [x] Use smooth early-end easing into the final settled state
 - [~] Match the same behavior through native OS display APIs
+  - Cross-platform native backends now exist for macOS and Windows
+  - Real-hardware tuning and parity verification are still pending
 - [ ] Tune final effect values on real hardware
 
 ### 4.5 Reliability And Observability
 
 - [x] Add unit coverage for core phase calculation
 - [x] Confirm the frontend production build succeeds
+- [x] Confirm backend tests succeed locally
 - [ ] Log state transitions locally
 - [ ] Log manual user actions locally
+- [ ] Log platform backend failures and recovery attempts locally
 - [ ] Log current config snapshots locally
 - [ ] Log platform application failures locally
 - [ ] Validate acceptance criteria on Windows
@@ -250,6 +261,8 @@ This section reflects the current repository state, not just the original intent
 - [ ] During roughly the first 80% of a `<= 50 minute` work session, the display appears unchanged
 - [ ] During the final dynamic cue window, the user can perceive change without being startled
 - [ ] At the break boundary, the display becomes visibly less attractive for continued work
+- [ ] Once the cue is strong enough, the intended user behavior is to leave the screen rather than interact with another interruption surface
+- [ ] After returning, the user can restore the neutral state through a single clear `Reset` action
 - [x] Sessions from `2 minutes` upward remain valid, and sessions shorter than `2 minutes` are treated as unsupported when entered
 - [x] Sessions longer than `50 minutes` do not keep extending prewarm and evolution indefinitely
 - [x] `End early` produces the same `Statue` state immediately rather than resetting the session
