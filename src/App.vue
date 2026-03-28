@@ -9,7 +9,6 @@ const NEUTRAL_SNAPSHOT = Object.freeze({
   phase: "Stable",
   saturation: 1,
   warmthKelvin: 6500,
-  grayscale: 0
 });
 
 const isSettingsOpen = ref(false);
@@ -238,11 +237,11 @@ function kelvinToWarmth(value) {
 function cueStyleModifiers(style) {
   switch (style) {
     case "dim":
-      return { warmth: 0.2, grayscale: 1.05, saturation: 0.72 };
+      return { warmth: 0.2, saturation: 0.72 };
     case "full":
-      return { warmth: 1.15, grayscale: 1.15, saturation: 0.9 };
+      return { warmth: 1.15, saturation: 0.9 };
     default:
-      return { warmth: 1, grayscale: 0.72, saturation: 1 };
+      return { warmth: 1, saturation: 1 };
   }
 }
 
@@ -326,9 +325,8 @@ const targetBodyMatrix = computed(() => {
   const modifiers = cueStyleModifiers(cueStyle.value);
   const warmth = clamp(kelvinToWarmth(effectiveSnapshot.value.warmthKelvin) * modifiers.warmth, 0, 1);
   const saturation = clamp(effectiveSnapshot.value.saturation * modifiers.saturation, 0, 1);
-  const grayscale = clamp(effectiveSnapshot.value.grayscale * modifiers.grayscale, 0, 1);
-  const brightness = 1 - warmth * 0.06 - grayscale * 0.08;
-  const chroma = clamp(saturation * (1 - grayscale), 0, 1);
+  const brightness = 1 - warmth * 0.06;
+  const chroma = saturation;
 
   const matrix = [
     brightnessMatrix(brightness),

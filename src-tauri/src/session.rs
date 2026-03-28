@@ -453,7 +453,6 @@ fn should_transition_effect(from_snapshot: &EffectSnapshot, to_snapshot: &Effect
 
 fn is_neutral_snapshot(snapshot: &EffectSnapshot) -> bool {
     snapshot.phase == crate::engine::Phase::Stable
-        && snapshot.grayscale <= 0.001
         && (snapshot.saturation - 1.0).abs() <= 0.001
         && snapshot.warmth_kelvin >= 6500
 }
@@ -474,7 +473,6 @@ fn interpolate_snapshot(
             from_snapshot.phase
         },
         saturation: from_snapshot.saturation + (to_snapshot.saturation - from_snapshot.saturation) * progress,
-        grayscale: from_snapshot.grayscale + (to_snapshot.grayscale - from_snapshot.grayscale) * progress,
         warmth_kelvin: (from_snapshot.warmth_kelvin as f32
             + (to_snapshot.warmth_kelvin as f32 - from_snapshot.warmth_kelvin as f32) * progress)
             .round() as u32,
@@ -516,7 +514,6 @@ fn neutral_snapshot() -> EffectSnapshot {
     EffectSnapshot {
         phase: crate::engine::Phase::Stable,
         saturation: 1.0,
-        grayscale: 0.0,
         warmth_kelvin: 6500,
     }
 }

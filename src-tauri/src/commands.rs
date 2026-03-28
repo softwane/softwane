@@ -17,7 +17,6 @@ pub struct PreviewPayload {
 pub fn apply_effect_snapshot(
     phase: String,
     saturation: f32,
-    grayscale: f32,
     warmth_kelvin: u32,
     cue_style: String,
     applier: State<'_, ManagedDisplayEffectApplier>,
@@ -25,7 +24,6 @@ pub fn apply_effect_snapshot(
     let snapshot = EffectSnapshot {
         phase: parse_phase(&phase),
         saturation,
-        grayscale,
         warmth_kelvin,
     };
 

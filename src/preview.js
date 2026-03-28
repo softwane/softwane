@@ -35,7 +35,6 @@ export function deriveLocalSnapshot(sessionDurationMinutes, remainingMinutes) {
       phase: "Stable",
       saturation: 1,
       warmthKelvin: 6500,
-      grayscale: 0
     };
   }
 
@@ -48,7 +47,6 @@ export function deriveLocalSnapshot(sessionDurationMinutes, remainingMinutes) {
       phase: "JND",
       saturation: 1 - curve * 0.28,
       warmthKelvin: 6500 - curve * 1200,
-      grayscale: curve * 0.18
     };
   }
 
@@ -63,7 +61,6 @@ export function deriveLocalSnapshot(sessionDurationMinutes, remainingMinutes) {
     phase: remainingMinutes <= 0 ? "Statue" : "Evolution",
     saturation: 0.72 - evolutionCurve * 0.54,
     warmthKelvin: 5300 - evolutionCurve * 2800,
-    grayscale: 0.18 + evolutionCurve * 0.74
   };
 }
 
@@ -83,7 +80,6 @@ function normalizeCommandSnapshot(snapshot) {
     phase: phaseMap[normalizedPhase] ?? "Stable",
     saturation: snapshot.saturation,
     warmthKelvin: snapshot.warmth_kelvin,
-    grayscale: snapshot.grayscale
   };
 }
 
@@ -94,7 +90,6 @@ export async function applyNativeSnapshot(snapshot, cueStyle = "warm") {
     const applyResult = await invoke("apply_effect_snapshot", {
       phase: snapshot.phase,
       saturation: snapshot.saturation,
-      grayscale: snapshot.grayscale,
       warmthKelvin: Math.round(snapshot.warmthKelvin),
       cueStyle
     });
@@ -132,7 +127,6 @@ export async function animateNativeSnapshot(fromSnapshot, toSnapshot, cueStyle =
         phase: progress >= 1 ? toSnapshot.phase : fromSnapshot.phase,
         saturation: fromSnapshot.saturation + (toSnapshot.saturation - fromSnapshot.saturation) * eased,
         warmthKelvin: fromSnapshot.warmthKelvin + (toSnapshot.warmthKelvin - fromSnapshot.warmthKelvin) * eased,
-        grayscale: fromSnapshot.grayscale + (toSnapshot.grayscale - fromSnapshot.grayscale) * eased
       };
 
       if (progress >= 1 || now - lastAppliedAt >= minFrameGapMs) {
@@ -141,7 +135,6 @@ export async function animateNativeSnapshot(fromSnapshot, toSnapshot, cueStyle =
           await invoke("apply_effect_snapshot", {
             phase: snapshot.phase,
             saturation: snapshot.saturation,
-            grayscale: snapshot.grayscale,
             warmthKelvin: Math.round(snapshot.warmthKelvin),
             cueStyle
           });
@@ -166,7 +159,6 @@ export async function animateNativeSnapshot(fromSnapshot, toSnapshot, cueStyle =
           phase: toSnapshot.phase,
           saturation: toSnapshot.saturation,
           warmthKelvin: toSnapshot.warmthKelvin,
-          grayscale: toSnapshot.grayscale
         }
       });
     };
