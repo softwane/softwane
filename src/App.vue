@@ -479,6 +479,13 @@ watch(
 
 onMounted(() => {
   document.body.style.filter = "url(#erode-color-filter)";
+
+  if (window.__TAURI__) {
+    const { listen } = window.__TAURI__.event;
+    listen("tray-start-session", () => handleBeginSession());
+    listen("tray-pause-session", () => pauseSession());
+    listen("tray-reset-session", () => handleResetSession());
+  }
 });
 
 onUnmounted(() => {

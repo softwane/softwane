@@ -5,12 +5,14 @@ mod config;
 mod engine;
 mod platform;
 mod session;
+mod tray;
 
 pub fn run() {
     tauri::Builder::default()
         .manage(platform::ManagedDisplayEffectApplier::default())
         .manage(session::ManagedSessionController::default())
         .setup(|app| {
+            tray::setup_tray(app.handle())?;
             app.state::<session::ManagedSessionController>()
                 .start(app.handle().clone());
             Ok(())

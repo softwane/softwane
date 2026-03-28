@@ -170,6 +170,10 @@ fn tick_session(
     }
 
     if last_emitted.as_ref() != Some(&payload) {
+        let should_update_menu = last_emitted.as_ref()
+            .map(|last| last.session_stage != payload.session_stage || last.session_status != payload.session_status)
+            .unwrap_or(true);
+        update_system_ui(app_handle, &payload, should_update_menu);
         let _ = app_handle.emit(SESSION_EVENT, payload.clone());
         *last_emitted = Some(payload);
     }
@@ -199,8 +203,37 @@ fn mutate_session(
         build_payload(&state, now_ms)
     };
 
+    update_system_ui(app_handle, &payload, true);
     let _ = app_handle.emit(SESSION_EVENT, payload.clone());
     payload
+}
+
+fn update_system_ui(app_handle: &AppHandle, payload: &SessionStatePayload, force_menu_update: bool) {
+    let progress = if payload.session_stage == "Work" && payload.work_duration_minutes > 0 {
+        let total_seconds = u64::from(payload.work_duration_minutes) * 60;
+        let progress = 100 - ((payload.remaining_seconds * 100) / total_seconds.max(1));
+        progress.min(100)
+    } else {
+        0
+    };
+
+    if let Some(window) = app_handle.get_webview_window("main") {
+        let _ = window.set_progress_bar(tauri::window::ProgressBarState {
+            progress: Some(progress),
+            status: None,
+        });
+    }
+
+    let tray_title = match payload.session_stage.as_str() {
+        "Work" => format!("{}:{:02}", payload.remaining_seconds / 60, payload.remaining_seconds % 60),
+        "Break" => "Break".to_string(),
+        _ => "Idle".to_string(),
+    };
+    crate::tray::update_tray_title(app_handle, &tray_title);
+
+    if force_menu_update {
+        let _ = crate::tray::update_tray_menu(app_handle, &payload.session_stage, &payload.session_status);
+    }
 }
 
 fn build_payload(state: &SessionRuntimeState, now_ms: u64) -> SessionStatePayload {
