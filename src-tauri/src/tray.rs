@@ -36,9 +36,7 @@ fn build_tray_menu<R: Runtime>(
             (app.default_window_icon().unwrap().clone(), false)
         };
 
-        let mut builder = TrayIconBuilder::with_id("main")
-            .icon(icon)
-            .menu(&menu);
+        let mut builder = TrayIconBuilder::with_id("main").icon(icon).menu(&menu);
 
         if use_template {
             builder = builder.icon_as_template(true);

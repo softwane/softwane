@@ -1,12 +1,16 @@
 use serde::Serialize;
 use tauri::State;
 
-use crate::engine::EffectSnapshot;
+use crate::engine::{EffectSnapshot, Phase};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ApplyResult {
     pub applied: bool,
     pub backend: &'static str,
+    pub error: Option<String>,
+    pub recovery_attempted: bool,
+    pub recovery_succeeded: bool,
+    pub recovery_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,10 +28,52 @@ impl CueStyle {
             _ => Self::Warm,
         }
     }
+
+    pub fn as_id(self) -> &'static str {
+        match self {
+            Self::Dim => "dim",
+            Self::Warm => "warm",
+            Self::Full => "full",
+        }
+    }
 }
 
 pub trait DisplayEffectApplier {
-    fn apply(&self, snapshot: &EffectSnapshot, cue_style: CueStyle) -> ApplyResult;
+    fn backend_name(&self) -> &'static str;
+    fn try_apply(&self, snapshot: &EffectSnapshot, cue_style: CueStyle) -> Result<bool, String>;
+
+    fn apply(&self, snapshot: &EffectSnapshot, cue_style: CueStyle) -> ApplyResult {
+        match self.try_apply(snapshot, cue_style) {
+            Ok(applied) => ApplyResult {
+                applied,
+                backend: self.backend_name(),
+                error: None,
+                recovery_attempted: false,
+                recovery_succeeded: false,
+                recovery_error: None,
+            },
+            Err(error) => {
+                let recovery_attempted = !is_neutral_snapshot(snapshot);
+                let (recovery_succeeded, recovery_error) = if recovery_attempted {
+                    match self.try_apply(&neutral_snapshot(), cue_style) {
+                        Ok(applied) => (applied, None),
+                        Err(recovery_error) => (false, Some(recovery_error)),
+                    }
+                } else {
+                    (false, None)
+                };
+
+                ApplyResult {
+                    applied: false,
+                    backend: self.backend_name(),
+                    error: Some(error),
+                    recovery_attempted,
+                    recovery_succeeded,
+                    recovery_error,
+                }
+            }
+        }
+    }
 }
 
 pub type ManagedDisplayEffectApplier = PlatformDisplayEffectApplier;
@@ -37,11 +83,12 @@ pub type ManagedDisplayEffectApplier = PlatformDisplayEffectApplier;
 pub struct MockDisplayEffectApplier;
 
 impl DisplayEffectApplier for MockDisplayEffectApplier {
-    fn apply(&self, _snapshot: &EffectSnapshot, _cue_style: CueStyle) -> ApplyResult {
-        ApplyResult {
-            applied: false,
-            backend: "mock",
-        }
+    fn backend_name(&self) -> &'static str {
+        "mock"
+    }
+
+    fn try_apply(&self, _snapshot: &EffectSnapshot, _cue_style: CueStyle) -> Result<bool, String> {
+        Ok(false)
     }
 }
 
@@ -58,7 +105,7 @@ pub type PlatformDisplayEffectApplier = WindowsDisplayEffectApplier;
 mod macos {
     use std::sync::Mutex;
 
-    use super::{ApplyResult, CueStyle, DisplayEffectApplier};
+    use super::{is_neutral_snapshot, CueStyle, DisplayEffectApplier};
     use crate::engine::EffectSnapshot;
 
     type CGDirectDisplayID = u32;
@@ -117,17 +164,17 @@ mod macos {
     }
 
     impl DisplayEffectApplier for MacDisplayEffectApplier {
-        fn apply(&self, snapshot: &EffectSnapshot, cue_style: CueStyle) -> ApplyResult {
-            match self.apply_snapshot(snapshot, cue_style) {
-                Ok(applied) => ApplyResult {
-                    applied,
-                    backend: "macos-core-graphics",
-                },
-                Err(_) => ApplyResult {
-                    applied: false,
-                    backend: "macos-core-graphics",
-                },
-            }
+        fn backend_name(&self) -> &'static str {
+            "macos-core-graphics"
+        }
+
+        fn try_apply(
+            &self,
+            snapshot: &EffectSnapshot,
+            cue_style: CueStyle,
+        ) -> Result<bool, String> {
+            self.apply_snapshot(snapshot, cue_style)
+                .map_err(|error| error.to_string())
         }
     }
 
@@ -172,8 +219,8 @@ mod macos {
             let saturation =
                 (snapshot.saturation.clamp(0.0, 1.0) * modifiers.saturation).clamp(0.0, 1.0);
             let chroma = saturation;
-            let brightness = (1.0 - warmth * modifiers.brightness_warmth)
-                .clamp(modifiers.min_brightness, 1.0);
+            let brightness =
+                (1.0 - warmth * modifiers.brightness_warmth).clamp(modifiers.min_brightness, 1.0);
             let red_scale = (brightness * (1.0 + warmth * modifiers.red_boost)).clamp(0.0, 1.25);
             let green_scale =
                 (brightness * (1.0 + warmth * modifiers.green_boost)).clamp(0.0, 1.15);
@@ -203,11 +250,6 @@ mod macos {
 
             Ok(true)
         }
-    }
-
-    fn is_neutral_snapshot(snapshot: &EffectSnapshot) -> bool {
-        (snapshot.saturation - 1.0).abs() <= 0.001
-            && snapshot.warmth_kelvin >= NEUTRAL_WARMTH_KELVIN as u32
     }
 
     fn normalize_warmth(warmth_kelvin: u32) -> f32 {
@@ -366,7 +408,7 @@ pub use macos::PublicMacDisplayEffectApplier as MacDisplayEffectApplier;
 mod windows {
     use std::sync::Mutex;
 
-    use super::{ApplyResult, CueStyle, DisplayEffectApplier};
+    use super::{CueStyle, DisplayEffectApplier};
     use crate::engine::EffectSnapshot;
 
     #[derive(Default)]
@@ -381,17 +423,17 @@ mod windows {
     }
 
     impl DisplayEffectApplier for WindowsDisplayEffectApplier {
-        fn apply(&self, snapshot: &EffectSnapshot, cue_style: CueStyle) -> ApplyResult {
-            match self.apply_snapshot(snapshot, cue_style) {
-                Ok(applied) => ApplyResult {
-                    applied,
-                    backend: "windows-magnification",
-                },
-                Err(_) => ApplyResult {
-                    applied: false,
-                    backend: "windows-magnification",
-                },
-            }
+        fn backend_name(&self) -> &'static str {
+            "windows-magnification"
+        }
+
+        fn try_apply(
+            &self,
+            snapshot: &EffectSnapshot,
+            cue_style: CueStyle,
+        ) -> Result<bool, String> {
+            self.apply_snapshot(snapshot, cue_style)
+                .map_err(|error| error.to_string())
         }
     }
 
@@ -493,13 +535,6 @@ mod windows {
         }
     }
 
-    fn is_neutral_snapshot(snapshot: &EffectSnapshot) -> bool {
-        // Treat extremely subtle early-JND values as neutral to avoid visible "kick"
-        // when we first switch from identity to a non-identity matrix.
-        (snapshot.saturation - 1.0).abs() <= 0.01
-            && snapshot.warmth_kelvin >= 6450
-    }
-
     fn identity_matrix() -> [[f32; 5]; 5] {
         [
             [1.0, 0.0, 0.0, 0.0, 0.0],
@@ -511,9 +546,10 @@ mod windows {
     }
 
     fn matrix_nearly_equal(a: &[[f32; 5]; 5], b: &[[f32; 5]; 5], eps: f32) -> bool {
-        a.iter().flatten().zip(b.iter().flatten()).all(|(x, y)| {
-            (*x - *y).abs() <= eps || ((*x).is_nan() && (*y).is_nan())
-        })
+        a.iter()
+            .flatten()
+            .zip(b.iter().flatten())
+            .all(|(x, y)| (*x - *y).abs() <= eps || ((*x).is_nan() && (*y).is_nan()))
     }
 
     fn mul(a: [[f32; 5]; 5], b: [[f32; 5]; 5]) -> [[f32; 5]; 5] {
@@ -549,8 +585,6 @@ mod windows {
 
     fn warmth_matrix(normalized_warmth: f32) -> [[f32; 5]; 5] {
         let w = normalized_warmth.clamp(0.0, 1.0);
-        // TODO(windows): "Full erosion" final stage can feel slightly green.
-        // Tune these RGB scalars (and/or CueStyle::Full modifiers) to reduce green bias.
         let r = (1.0 + 0.15 * w).clamp(0.0, 1.25);
         let g = (1.0 + 0.02 * w).clamp(0.0, 1.15);
         let b = (1.0 - 0.20 * w).clamp(0.0, 1.0);
@@ -566,9 +600,9 @@ mod windows {
     fn brightness_matrix(brightness: f32) -> [[f32; 5]; 5] {
         let b = brightness.clamp(0.0, 1.0);
         [
-            [b,   0.0, 0.0, 0.0, 0.0],
-            [0.0, b,   0.0, 0.0, 0.0],
-            [0.0, 0.0, b,   0.0, 0.0],
+            [b, 0.0, 0.0, 0.0, 0.0],
+            [0.0, b, 0.0, 0.0, 0.0],
+            [0.0, 0.0, b, 0.0, 0.0],
             [0.0, 0.0, 0.0, 1.0, 0.0],
             [0.0, 0.0, 0.0, 0.0, 1.0],
         ]
@@ -620,10 +654,6 @@ mod windows {
 
         let m = cue_style.modifiers_windows();
         let warmth = (normalize_warmth(snapshot.warmth_kelvin) * m.warmth).clamp(0.0, 1.0);
-        // Smooth saturation modifier: sat_modifier(s) = m.saturation + (1 - m.saturation) * s
-        // At raw_sat=1.0 (neutral) the modifier equals 1.0; as saturation decreases it
-        // smoothly converges to m.saturation, matching the intended cue-style intensity
-        // at full erosion without any single-frame discontinuity at the neutral threshold.
         let raw_sat = snapshot.saturation.clamp(0.0, 1.0);
         let sat_modifier = m.saturation + (1.0 - m.saturation) * raw_sat;
         let saturation = (raw_sat * sat_modifier).clamp(0.0, 1.0);
@@ -632,8 +662,6 @@ mod windows {
         let ms = saturation_matrix(saturation);
         let mw = warmth_matrix(warmth);
         let mb = brightness_matrix(brightness);
-
-        // v' = v * Ms * Mw * Mb
         mul(mul(ms, mw), mb)
     }
 
@@ -709,4 +737,18 @@ pub fn apply_preview(
     cue_style: CueStyle,
 ) -> ApplyResult {
     applier.apply(snapshot, cue_style)
+}
+
+fn neutral_snapshot() -> EffectSnapshot {
+    EffectSnapshot {
+        phase: Phase::Stable,
+        saturation: 1.0,
+        warmth_kelvin: 6500,
+    }
+}
+
+fn is_neutral_snapshot(snapshot: &EffectSnapshot) -> bool {
+    snapshot.phase == Phase::Stable
+        && (snapshot.saturation - 1.0).abs() <= 0.001
+        && snapshot.warmth_kelvin >= 6500
 }

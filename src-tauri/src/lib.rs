@@ -3,12 +3,14 @@ use tauri::Manager;
 mod commands;
 mod config;
 mod engine;
+mod observability;
 mod platform;
 mod session;
 mod tray;
 
 pub fn run() {
     tauri::Builder::default()
+        .manage(observability::ManagedObservability::default())
         .manage(platform::ManagedDisplayEffectApplier::default())
         .manage(session::ManagedSessionController::default())
         .setup(|app| {
