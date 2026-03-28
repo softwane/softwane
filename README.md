@@ -144,6 +144,7 @@ Implemented:
 - macOS native display adapter using `Core Graphics` transfer tables as a system-wide fallback
 - Windows native display adapter using the `Magnification API`
 - Vue 3 preview UI
+- Local observability logs for transitions, user actions, config snapshots, and platform failures
 - Product and technical spec
 
 Not implemented yet:
@@ -151,18 +152,39 @@ Not implemented yet:
 - Global hotkeys
 - Auto-launch
 - Cue-window and intensity tuning beyond the current defaults
-- Local observability and platform-failure reporting
+- Configurable loop behavior
 
 ## Verification Notes
 
 Local validation completed:
 
+- `cargo test`
 - `pnpm build`
 - `pnpm tauri build --debug`
 
-Not fully validated in this environment:
+## Observability Logs
 
-- `cargo test`
+Local observability events are written as JSON Lines to `observability.jsonl`.
+
+Path details for this project:
+
+- Bundle identifier: `com.erode.app`
+- Log filename: `observability.jsonl`
+
+Default log locations:
+
+- macOS: `~/Library/Logs/com.erode.app/observability.jsonl`
+- Windows: `%LOCALAPPDATA%\\com.erode.app\\logs\\observability.jsonl`
+
+The backend resolves the path through Tauri's app log directory first and falls back to the app local data directory only if the log directory cannot be resolved.
+
+Logged event categories currently include:
+
+- Session transitions
+- Manual user actions
+- Config snapshots
+- Platform apply failures
+- Platform recovery attempts and recovery failures
 
 ## Troubleshooting
 
@@ -199,4 +221,3 @@ pnpm tauri:dev
 2. Expose cue-window and intensity tuning beyond the current defaults
 3. Add local observability for transitions, user actions, and platform failures
 4. Tune the transition parameters with manual visual testing on real hardware
-

@@ -1,17 +1,19 @@
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        Mutex,
+        mpsc, Mutex,
     },
     time::Duration,
 };
 
 use serde::Serialize;
+use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::{
     config::SessionConfig,
     engine::{calculate_snapshot, EffectSnapshot},
+    observability,
     platform::{apply_preview, CueStyle, ManagedDisplayEffectApplier},
 };
 
@@ -133,6 +135,15 @@ struct AppliedEffect {
     snapshot: EffectSnapshot,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionConfigSnapshot {
+    work_duration_minutes: u32,
+    cue_style: String,
+    auto_resume_enabled: bool,
+    pause_timeout_minutes: u32,
+}
+
 fn tick_session(
     app_handle: &AppHandle,
     last_emitted: &mut Option<SessionStatePayload>,
@@ -141,7 +152,10 @@ fn tick_session(
     let controller = app_handle.state::<ManagedSessionController>();
     let now_ms = unix_time_ms();
     let (payload, cue_style) = {
-        let mut state = controller.state.lock().expect("session state lock poisoned");
+        let mut state = controller
+            .state
+            .lock()
+            .expect("session state lock poisoned");
         advance_state(&mut state, now_ms);
         sync_effect_snapshot(&mut state, now_ms);
         let payload = build_payload(&state, now_ms);
@@ -156,22 +170,28 @@ fn tick_session(
     let is_cue_transitioning = payload.is_cue_transitioning;
 
     if last_applied.as_ref() != Some(&next_effect) {
-        // MagSetFullscreenColorEffect (Windows Magnification API) requires the
-        // calling thread to run a Win32 message loop. Tokio worker threads do not
-        // have one, so we must dispatch to the main thread.
-        let snapshot = next_effect.snapshot.clone();
-        let cue_style = next_effect.cue_style;
-        let handle_for_apply = app_handle.clone();
-        let _ = app_handle.run_on_main_thread(move || {
-            let applier = handle_for_apply.state::<ManagedDisplayEffectApplier>();
-            apply_preview(applier, &snapshot, cue_style);
-        });
-        *last_applied = Some(next_effect);
+        let apply_result = apply_effect_on_main_thread(app_handle, &next_effect);
+        log_platform_apply_result(
+            app_handle,
+            "session_tick",
+            &next_effect.snapshot,
+            next_effect.cue_style,
+            &apply_result,
+        );
+
+        if apply_result.applied {
+            *last_applied = Some(next_effect);
+        }
     }
 
     if last_emitted.as_ref() != Some(&payload) {
-        let should_update_menu = last_emitted.as_ref()
-            .map(|last| last.session_stage != payload.session_stage || last.session_status != payload.session_status)
+        log_session_transition(app_handle, last_emitted.as_ref(), &payload);
+        let should_update_menu = last_emitted
+            .as_ref()
+            .map(|last| {
+                last.session_stage != payload.session_stage
+                    || last.session_status != payload.session_status
+            })
             .unwrap_or(true);
         update_system_ui(app_handle, &payload, should_update_menu);
         let _ = app_handle.emit(SESSION_EVENT, payload.clone());
@@ -190,25 +210,57 @@ fn tick_session(
 fn mutate_session(
     app_handle: &AppHandle,
     controller: State<'_, ManagedSessionController>,
+    action: &'static str,
+    action_payload: serde_json::Value,
     mutate: impl FnOnce(&mut SessionRuntimeState, u64),
 ) -> SessionStatePayload {
     let now_ms = unix_time_ms();
 
-    let payload = {
-        let mut state = controller.state.lock().expect("session state lock poisoned");
+    let (payload, config_snapshot) = {
+        let mut state = controller
+            .state
+            .lock()
+            .expect("session state lock poisoned");
         advance_state(&mut state, now_ms);
         mutate(&mut state, now_ms);
         advance_state(&mut state, now_ms);
         sync_effect_snapshot(&mut state, now_ms);
-        build_payload(&state, now_ms)
+        (build_payload(&state, now_ms), build_config_snapshot(&state))
     };
+
+    observability::log_event(
+        app_handle,
+        "user_action",
+        json!({
+            "action": action,
+            "input": action_payload,
+            "result": {
+                "sessionStage": payload.session_stage,
+                "sessionStatus": payload.session_status,
+                "remainingSeconds": payload.remaining_seconds,
+                "pauseRemainingSeconds": payload.pause_remaining_seconds,
+            }
+        }),
+    );
+    observability::log_event(
+        app_handle,
+        "config_snapshot",
+        json!({
+            "source": action,
+            "config": config_snapshot,
+        }),
+    );
 
     update_system_ui(app_handle, &payload, true);
     let _ = app_handle.emit(SESSION_EVENT, payload.clone());
     payload
 }
 
-fn update_system_ui(app_handle: &AppHandle, payload: &SessionStatePayload, force_menu_update: bool) {
+fn update_system_ui(
+    app_handle: &AppHandle,
+    payload: &SessionStatePayload,
+    force_menu_update: bool,
+) {
     let progress = if payload.session_stage == "Work" && payload.work_duration_minutes > 0 {
         let total_seconds = u64::from(payload.work_duration_minutes) * 60;
         let progress = 100 - ((payload.remaining_seconds * 100) / total_seconds.max(1));
@@ -225,14 +277,22 @@ fn update_system_ui(app_handle: &AppHandle, payload: &SessionStatePayload, force
     }
 
     let tray_title = match payload.session_stage.as_str() {
-        "Work" => format!("{}:{:02}", payload.remaining_seconds / 60, payload.remaining_seconds % 60),
+        "Work" => format!(
+            "{}:{:02}",
+            payload.remaining_seconds / 60,
+            payload.remaining_seconds % 60
+        ),
         "Break" => "Break".to_string(),
         _ => "Idle".to_string(),
     };
     crate::tray::update_tray_title(app_handle, &tray_title);
 
     if force_menu_update {
-        let _ = crate::tray::update_tray_menu(app_handle, &payload.session_stage, &payload.session_status);
+        let _ = crate::tray::update_tray_menu(
+            app_handle,
+            &payload.session_stage,
+            &payload.session_status,
+        );
     }
 }
 
@@ -472,7 +532,8 @@ fn interpolate_snapshot(
         } else {
             from_snapshot.phase
         },
-        saturation: from_snapshot.saturation + (to_snapshot.saturation - from_snapshot.saturation) * progress,
+        saturation: from_snapshot.saturation
+            + (to_snapshot.saturation - from_snapshot.saturation) * progress,
         warmth_kelvin: (from_snapshot.warmth_kelvin as f32
             + (to_snapshot.warmth_kelvin as f32 - from_snapshot.warmth_kelvin as f32) * progress)
             .round() as u32,
@@ -518,10 +579,126 @@ fn neutral_snapshot() -> EffectSnapshot {
     }
 }
 
+fn build_config_snapshot(state: &SessionRuntimeState) -> SessionConfigSnapshot {
+    SessionConfigSnapshot {
+        work_duration_minutes: state.work_duration_minutes,
+        cue_style: state.cue_style.as_id().to_string(),
+        auto_resume_enabled: state.auto_resume_enabled,
+        pause_timeout_minutes: state.pause_timeout_minutes,
+    }
+}
+
+fn apply_effect_on_main_thread(
+    app_handle: &AppHandle,
+    effect: &AppliedEffect,
+) -> crate::platform::ApplyResult {
+    let (sender, receiver) = mpsc::channel();
+    let snapshot = effect.snapshot.clone();
+    let cue_style = effect.cue_style;
+    let handle_for_apply = app_handle.clone();
+
+    if let Err(error) = app_handle.run_on_main_thread(move || {
+        let applier = handle_for_apply.state::<ManagedDisplayEffectApplier>();
+        let result = apply_preview(applier, &snapshot, cue_style);
+        let _ = sender.send(result);
+    }) {
+        return crate::platform::ApplyResult {
+            applied: false,
+            backend: "run-on-main-thread",
+            error: Some(error.to_string()),
+            recovery_attempted: false,
+            recovery_succeeded: false,
+            recovery_error: None,
+        };
+    }
+
+    receiver
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap_or(crate::platform::ApplyResult {
+            applied: false,
+            backend: "run-on-main-thread",
+            error: Some("timed out waiting for platform apply".to_string()),
+            recovery_attempted: false,
+            recovery_succeeded: false,
+            recovery_error: None,
+        })
+}
+
+fn log_session_transition(
+    app_handle: &AppHandle,
+    previous: Option<&SessionStatePayload>,
+    next: &SessionStatePayload,
+) {
+    let changed = previous
+        .map(|last| {
+            last.session_stage != next.session_stage
+                || last.session_status != next.session_status
+                || last.snapshot.phase != next.snapshot.phase
+        })
+        .unwrap_or(true);
+
+    if !changed {
+        return;
+    }
+
+    observability::log_event(
+        app_handle,
+        "session_transition",
+        json!({
+            "from": previous.map(|last| {
+                json!({
+                    "sessionStage": last.session_stage,
+                    "sessionStatus": last.session_status,
+                    "phase": last.snapshot.phase,
+                })
+            }),
+            "to": {
+                "sessionStage": next.session_stage,
+                "sessionStatus": next.session_status,
+                "phase": next.snapshot.phase,
+                "remainingSeconds": next.remaining_seconds,
+            }
+        }),
+    );
+}
+
+fn log_platform_apply_result(
+    app_handle: &AppHandle,
+    source: &'static str,
+    snapshot: &EffectSnapshot,
+    cue_style: CueStyle,
+    result: &crate::platform::ApplyResult,
+) {
+    if result.error.is_none() && !result.recovery_attempted {
+        return;
+    }
+
+    observability::log_event(
+        app_handle,
+        "platform_apply",
+        json!({
+            "source": source,
+            "backend": result.backend,
+            "cueStyle": cue_style.as_id(),
+            "snapshot": snapshot,
+            "applied": result.applied,
+            "error": result.error,
+            "recoveryAttempted": result.recovery_attempted,
+            "recoverySucceeded": result.recovery_succeeded,
+            "recoveryError": result.recovery_error,
+        }),
+    );
+}
+
 #[tauri::command]
-pub fn get_timer_session_state(controller: State<'_, ManagedSessionController>) -> SessionStatePayload {
+pub fn get_timer_session_state(
+    controller: State<'_, ManagedSessionController>,
+) -> SessionStatePayload {
     let now_ms = unix_time_ms();
-    let mut state = controller.state.lock().expect("session state lock poisoned");
+    let mut state = controller
+        .state
+        .lock()
+        .expect("session state lock poisoned");
     advance_state(&mut state, now_ms);
     sync_effect_snapshot(&mut state, now_ms);
     build_payload(&state, now_ms)
@@ -536,34 +713,45 @@ pub fn start_timer_session(
     app_handle: AppHandle,
     controller: State<'_, ManagedSessionController>,
 ) -> SessionStatePayload {
-    mutate_session(&app_handle, controller, |state, now_ms| {
-        let work_duration_minutes = normalize_work_duration_minutes(work_duration_minutes);
-        state.work_duration_minutes = work_duration_minutes;
-        state.cue_style = CueStyle::from_id(&cue_style);
-        state.auto_resume_enabled = auto_resume_enabled;
-        state.pause_timeout_minutes = normalize_pause_timeout_minutes(pause_timeout_minutes);
+    mutate_session(
+        &app_handle,
+        controller,
+        "start_timer_session",
+        json!({
+            "workDurationMinutes": work_duration_minutes,
+            "cueStyle": cue_style,
+            "autoResumeEnabled": auto_resume_enabled,
+            "pauseTimeoutMinutes": pause_timeout_minutes,
+        }),
+        |state, now_ms| {
+            let work_duration_minutes = normalize_work_duration_minutes(work_duration_minutes);
+            state.work_duration_minutes = work_duration_minutes;
+            state.cue_style = CueStyle::from_id(&cue_style);
+            state.auto_resume_enabled = auto_resume_enabled;
+            state.pause_timeout_minutes = normalize_pause_timeout_minutes(pause_timeout_minutes);
 
-        if work_duration_minutes < MIN_SUPPORTED_WORK_DURATION_MINUTES {
-            state.stage = SessionStage::Idle;
+            if work_duration_minutes < MIN_SUPPORTED_WORK_DURATION_MINUTES {
+                state.stage = SessionStage::Idle;
+                state.is_paused = false;
+                state.work_end_at_ms = None;
+                state.paused_remaining_ms = 0;
+                state.pause_resume_at_ms = None;
+                state.early_end_started_at_ms = None;
+                state.early_end_finishes_at_ms = None;
+                state.early_end_from_remaining_ms = 0;
+                return;
+            }
+
+            state.stage = SessionStage::Work;
             state.is_paused = false;
-            state.work_end_at_ms = None;
+            state.work_end_at_ms = Some(now_ms + u64::from(work_duration_minutes) * 60_000);
             state.paused_remaining_ms = 0;
             state.pause_resume_at_ms = None;
             state.early_end_started_at_ms = None;
             state.early_end_finishes_at_ms = None;
             state.early_end_from_remaining_ms = 0;
-            return;
-        }
-
-        state.stage = SessionStage::Work;
-        state.is_paused = false;
-        state.work_end_at_ms = Some(now_ms + u64::from(work_duration_minutes) * 60_000);
-        state.paused_remaining_ms = 0;
-        state.pause_resume_at_ms = None;
-        state.early_end_started_at_ms = None;
-        state.early_end_finishes_at_ms = None;
-        state.early_end_from_remaining_ms = 0;
-    })
+        },
+    )
 }
 
 #[tauri::command]
@@ -573,40 +761,49 @@ pub fn toggle_pause_timer_session(
     app_handle: AppHandle,
     controller: State<'_, ManagedSessionController>,
 ) -> SessionStatePayload {
-    mutate_session(&app_handle, controller, |state, now_ms| {
-        state.auto_resume_enabled = auto_resume_enabled;
-        state.pause_timeout_minutes = normalize_pause_timeout_minutes(pause_timeout_minutes);
+    mutate_session(
+        &app_handle,
+        controller,
+        "toggle_pause_timer_session",
+        json!({
+            "autoResumeEnabled": auto_resume_enabled,
+            "pauseTimeoutMinutes": pause_timeout_minutes,
+        }),
+        |state, now_ms| {
+            state.auto_resume_enabled = auto_resume_enabled;
+            state.pause_timeout_minutes = normalize_pause_timeout_minutes(pause_timeout_minutes);
 
-        if state.early_end_finishes_at_ms.is_some() {
-            return;
-        }
+            if state.early_end_finishes_at_ms.is_some() {
+                return;
+            }
 
-        if state.stage != SessionStage::Work && !state.is_paused {
-            return;
-        }
+            if state.stage != SessionStage::Work && !state.is_paused {
+                return;
+            }
 
-        if state.is_paused {
-            state.is_paused = false;
-            state.work_end_at_ms = Some(now_ms + state.paused_remaining_ms);
-            state.pause_resume_at_ms = None;
-            return;
-        }
+            if state.is_paused {
+                state.is_paused = false;
+                state.work_end_at_ms = Some(now_ms + state.paused_remaining_ms);
+                state.pause_resume_at_ms = None;
+                return;
+            }
 
-        let remaining_ms = current_remaining_ms(state, now_ms);
-        if remaining_ms == 0 {
-            enter_break(state);
-            return;
-        }
+            let remaining_ms = current_remaining_ms(state, now_ms);
+            if remaining_ms == 0 {
+                enter_break(state);
+                return;
+            }
 
-        state.is_paused = true;
-        state.work_end_at_ms = None;
-        state.paused_remaining_ms = remaining_ms;
-        state.pause_resume_at_ms = if state.auto_resume_enabled {
-            Some(now_ms + u64::from(state.pause_timeout_minutes) * 60_000)
-        } else {
-            None
-        };
-    })
+            state.is_paused = true;
+            state.work_end_at_ms = None;
+            state.paused_remaining_ms = remaining_ms;
+            state.pause_resume_at_ms = if state.auto_resume_enabled {
+                Some(now_ms + u64::from(state.pause_timeout_minutes) * 60_000)
+            } else {
+                None
+            };
+        },
+    )
 }
 
 #[tauri::command]
@@ -614,16 +811,22 @@ pub fn reset_timer_session(
     app_handle: AppHandle,
     controller: State<'_, ManagedSessionController>,
 ) -> SessionStatePayload {
-    mutate_session(&app_handle, controller, |state, _| {
-        state.stage = SessionStage::Idle;
-        state.is_paused = false;
-        state.work_end_at_ms = None;
-        state.paused_remaining_ms = 0;
-        state.pause_resume_at_ms = None;
-        state.early_end_started_at_ms = None;
-        state.early_end_finishes_at_ms = None;
-        state.early_end_from_remaining_ms = 0;
-    })
+    mutate_session(
+        &app_handle,
+        controller,
+        "reset_timer_session",
+        json!({}),
+        |state, _| {
+            state.stage = SessionStage::Idle;
+            state.is_paused = false;
+            state.work_end_at_ms = None;
+            state.paused_remaining_ms = 0;
+            state.pause_resume_at_ms = None;
+            state.early_end_started_at_ms = None;
+            state.early_end_finishes_at_ms = None;
+            state.early_end_from_remaining_ms = 0;
+        },
+    )
 }
 
 #[tauri::command]
@@ -631,24 +834,30 @@ pub fn end_timer_session_early(
     app_handle: AppHandle,
     controller: State<'_, ManagedSessionController>,
 ) -> SessionStatePayload {
-    mutate_session(&app_handle, controller, |state, now_ms| {
-        if state.stage == SessionStage::Work {
-            let remaining_ms = current_remaining_ms(state, now_ms);
+    mutate_session(
+        &app_handle,
+        controller,
+        "end_timer_session_early",
+        json!({}),
+        |state, now_ms| {
+            if state.stage == SessionStage::Work {
+                let remaining_ms = current_remaining_ms(state, now_ms);
 
-            if remaining_ms == 0 {
-                enter_break(state);
-                return;
+                if remaining_ms == 0 {
+                    enter_break(state);
+                    return;
+                }
+
+                state.is_paused = false;
+                state.work_end_at_ms = None;
+                state.paused_remaining_ms = remaining_ms;
+                state.pause_resume_at_ms = None;
+                state.early_end_started_at_ms = Some(now_ms);
+                state.early_end_finishes_at_ms = Some(now_ms + EARLY_END_TRANSITION_MS);
+                state.early_end_from_remaining_ms = remaining_ms;
             }
-
-            state.is_paused = false;
-            state.work_end_at_ms = None;
-            state.paused_remaining_ms = remaining_ms;
-            state.pause_resume_at_ms = None;
-            state.early_end_started_at_ms = Some(now_ms);
-            state.early_end_finishes_at_ms = Some(now_ms + EARLY_END_TRANSITION_MS);
-            state.early_end_from_remaining_ms = remaining_ms;
-        }
-    })
+        },
+    )
 }
 
 #[tauri::command]
@@ -659,19 +868,29 @@ pub fn update_timer_session_settings(
     app_handle: AppHandle,
     controller: State<'_, ManagedSessionController>,
 ) -> SessionStatePayload {
-    mutate_session(&app_handle, controller, |state, now_ms| {
-        state.cue_style = CueStyle::from_id(&cue_style);
-        state.auto_resume_enabled = auto_resume_enabled;
-        state.pause_timeout_minutes = normalize_pause_timeout_minutes(pause_timeout_minutes);
+    mutate_session(
+        &app_handle,
+        controller,
+        "update_timer_session_settings",
+        json!({
+            "cueStyle": cue_style,
+            "autoResumeEnabled": auto_resume_enabled,
+            "pauseTimeoutMinutes": pause_timeout_minutes,
+        }),
+        |state, now_ms| {
+            state.cue_style = CueStyle::from_id(&cue_style);
+            state.auto_resume_enabled = auto_resume_enabled;
+            state.pause_timeout_minutes = normalize_pause_timeout_minutes(pause_timeout_minutes);
 
-        if state.is_paused {
-            state.pause_resume_at_ms = if state.auto_resume_enabled {
-                Some(now_ms + u64::from(state.pause_timeout_minutes) * 60_000)
-            } else {
-                None
-            };
-        }
-    })
+            if state.is_paused {
+                state.pause_resume_at_ms = if state.auto_resume_enabled {
+                    Some(now_ms + u64::from(state.pause_timeout_minutes) * 60_000)
+                } else {
+                    None
+                };
+            }
+        },
+    )
 }
 
 #[tauri::command]
@@ -680,24 +899,37 @@ pub fn set_timer_session_remaining_seconds(
     app_handle: AppHandle,
     controller: State<'_, ManagedSessionController>,
 ) -> SessionStatePayload {
-    mutate_session(&app_handle, controller, |state, now_ms| {
-        if state.stage != SessionStage::Work || state.is_paused || state.early_end_finishes_at_ms.is_some() {
-            return;
-        }
+    mutate_session(
+        &app_handle,
+        controller,
+        "set_timer_session_remaining_seconds",
+        json!({
+            "remainingSeconds": remaining_seconds,
+        }),
+        |state, now_ms| {
+            if state.stage != SessionStage::Work
+                || state.is_paused
+                || state.early_end_finishes_at_ms.is_some()
+            {
+                return;
+            }
 
-        let remaining_seconds =
-            clamp_remaining_seconds_for_duration(remaining_seconds, state.work_duration_minutes);
+            let remaining_seconds = clamp_remaining_seconds_for_duration(
+                remaining_seconds,
+                state.work_duration_minutes,
+            );
 
-        if remaining_seconds == 0 {
-            enter_break(state);
-            return;
-        }
+            if remaining_seconds == 0 {
+                enter_break(state);
+                return;
+            }
 
-        state.work_end_at_ms = Some(now_ms + remaining_seconds * 1_000);
-        state.paused_remaining_ms = 0;
-        state.pause_resume_at_ms = None;
-        state.early_end_started_at_ms = None;
-        state.early_end_finishes_at_ms = None;
-        state.early_end_from_remaining_ms = 0;
-    })
+            state.work_end_at_ms = Some(now_ms + remaining_seconds * 1_000);
+            state.paused_remaining_ms = 0;
+            state.pause_resume_at_ms = None;
+            state.early_end_started_at_ms = None;
+            state.early_end_finishes_at_ms = None;
+            state.early_end_from_remaining_ms = 0;
+        },
+    )
 }
