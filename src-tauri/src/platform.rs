@@ -408,7 +408,7 @@ pub use macos::PublicMacDisplayEffectApplier as MacDisplayEffectApplier;
 mod windows {
     use std::sync::Mutex;
 
-    use super::{CueStyle, DisplayEffectApplier};
+    use super::{CueStyle, DisplayEffectApplier, is_neutral_snapshot};
     use crate::engine::EffectSnapshot;
 
     #[derive(Default)]
