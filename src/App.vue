@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import erodeMark from "./assets/erode-mark.svg";
+import { useAppearance } from "./composables/useAppearance";
 import { useTimerSession } from "./composables/useTimerSession";
 import { deriveLocalSnapshot } from "./preview";
 
@@ -44,6 +45,30 @@ const cueStyleOptions = [
     description: "Push warmth, dimming, and washout hardest."
   }
 ];
+
+const themeModeOptions = [
+  {
+    id: "auto",
+    label: "Auto",
+    description: "Follow the system appearance and switch live."
+  },
+  {
+    id: "dark",
+    label: "Dark",
+    description: "Always keep the app in dark mode."
+  },
+  {
+    id: "light",
+    label: "Light",
+    description: "Always keep the app in light mode."
+  }
+];
+
+const {
+  resolvedTheme,
+  setThemeMode,
+  themeMode
+} = useAppearance();
 
 const {
   autoResumeEnabled,
@@ -204,6 +229,14 @@ const secondaryStatusLine = computed(() => {
   }
 
   return "";
+});
+
+const themeModeSummary = computed(() => {
+  if (themeMode.value === "auto") {
+    return `Auto, ${resolvedTheme.value === "dark" ? "dark now" : "light now"}`;
+  }
+
+  return `${resolvedTheme.value === "dark" ? "Dark" : "Light"} fixed`;
 });
 
 function handleProgressScrub(value) {
@@ -627,7 +660,7 @@ onUnmounted(() => {
         <header class="settings-header">
           <div>
             <p class="settings-kicker">Mode settings</p>
-            <h2 class="settings-title">How the cue appears</h2>
+            <h2 class="settings-title">Appearance and cue</h2>
           </div>
           <button class="icon-button" type="button" aria-label="Close settings" @click="isSettingsOpen = false">
             ×
@@ -661,6 +694,28 @@ onUnmounted(() => {
             <span class="input-unit">min</span>
           </div>
         </label>
+
+        <section class="settings-group">
+          <div class="settings-group-header">
+            <span class="settings-group-title">Theme</span>
+            <span class="settings-group-meta">{{ themeModeSummary }}</span>
+          </div>
+
+          <div class="cue-style-list" role="radiogroup" aria-label="Theme mode">
+            <button
+              v-for="option in themeModeOptions"
+              :key="option.id"
+              :class="['cue-style-card', { active: themeMode === option.id }]"
+              type="button"
+              role="radio"
+              :aria-checked="themeMode === option.id"
+              @click="setThemeMode(option.id)"
+            >
+              <strong>{{ option.label }}</strong>
+              <span>{{ option.description }}</span>
+            </button>
+          </div>
+        </section>
       </div>
     </section>
   </main>

@@ -1,16 +1,64 @@
 :root {
   --bg: #f3eadb;
+  --bg-top: #f8f2e8;
+  --bg-bottom: #e6d4bc;
+  --bg-glow: rgba(255, 255, 255, 0.65);
+  --bg-accent-glow: rgba(192, 133, 73, 0.18);
   --line: rgba(63, 42, 21, 0.14);
   --line-strong: rgba(63, 42, 21, 0.26);
   --text: #23170e;
   --muted: #77624e;
   --accent: #4d311d;
   --shadow: 0 22px 56px rgba(79, 50, 25, 0.12);
+  --surface: rgba(255, 252, 247, 0.7);
+  --surface-muted: rgba(255, 252, 247, 0.46);
+  --surface-raised: #f6ecde;
+  --surface-raised-fade: rgba(246, 236, 222, 0);
+  --surface-thumb: #f7efe4;
+  --track: rgba(63, 42, 21, 0.08);
+  --overlay-strong: rgba(24, 18, 12, 0.36);
+  --overlay-soft: rgba(24, 18, 12, 0.2);
+  --scrubber-border: rgba(63, 42, 21, 0.25);
+  --panel-shadow: 0 24px 72px rgba(48, 30, 15, 0.18);
+  --text-inverse: #f9f2e8;
+  --ink-soft: #77624e;
+  --field-accent: #6f4524;
+  --field-error: #8f2f24;
+  --card-active: rgba(77, 49, 29, 0.08);
   --motion-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-overlay-ms: 900ms;
   --motion-sheet-ms: 1200ms;
   --motion-ui-ms: 700ms;
   --motion-button-ms: 260ms;
+}
+
+:root[data-theme="dark"] {
+  --bg: #18110d;
+  --bg-top: #251a14;
+  --bg-bottom: #0f0a08;
+  --bg-glow: rgba(255, 240, 224, 0.06);
+  --bg-accent-glow: rgba(221, 137, 74, 0.14);
+  --line: rgba(248, 226, 197, 0.12);
+  --line-strong: rgba(248, 226, 197, 0.24);
+  --text: #f1e3d2;
+  --muted: #b89f86;
+  --accent: #e6b37e;
+  --shadow: 0 22px 56px rgba(0, 0, 0, 0.34);
+  --surface: rgba(34, 24, 18, 0.78);
+  --surface-muted: rgba(34, 24, 18, 0.56);
+  --surface-raised: #211813;
+  --surface-raised-fade: rgba(33, 24, 19, 0);
+  --surface-thumb: #2c211a;
+  --track: rgba(248, 226, 197, 0.12);
+  --overlay-strong: rgba(5, 4, 4, 0.56);
+  --overlay-soft: rgba(5, 4, 4, 0.38);
+  --scrubber-border: rgba(248, 226, 197, 0.24);
+  --panel-shadow: 0 24px 72px rgba(0, 0, 0, 0.42);
+  --text-inverse: #1a120d;
+  --ink-soft: #c8b29a;
+  --field-accent: #d4a06a;
+  --field-error: #ffab9d;
+  --card-active: rgba(230, 179, 126, 0.16);
 }
 
 * {
@@ -28,10 +76,13 @@ body {
   font-family: "Instrument Sans", "Avenir Next", sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.65), transparent 30%),
-    radial-gradient(circle at 80% 20%, rgba(192, 133, 73, 0.18), transparent 22%),
-    linear-gradient(180deg, #f8f2e8 0%, var(--bg) 48%, #e6d4bc 100%);
-  transition: filter 900ms var(--motion-soft);
+    radial-gradient(circle at top, var(--bg-glow), transparent 30%),
+    radial-gradient(circle at 80% 20%, var(--bg-accent-glow), transparent 22%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg) 48%, var(--bg-bottom) 100%);
+  transition:
+    background 700ms var(--motion-soft),
+    color 300ms var(--motion-soft),
+    filter 900ms var(--motion-soft);
 }
 
 .visual-filter-defs {
@@ -113,7 +164,7 @@ button {
 .start-button,
 .field input[type="number"] {
   border: 1px solid var(--line);
-  background: rgba(255, 252, 247, 0.7);
+  background: var(--surface);
   color: var(--text);
 }
 
@@ -135,7 +186,7 @@ button {
 .ghost-button-utility {
   flex: none;
   padding-inline: 11px;
-  background: rgba(255, 252, 247, 0.46);
+  background: var(--surface-muted);
 }
 
 .ghost-button:hover,
@@ -240,7 +291,7 @@ button {
   height: 5px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(63, 42, 21, 0.08);
+  background: var(--track);
 }
 
 .progress-fill {
@@ -283,16 +334,16 @@ button {
   height: 12px;
   margin-top: -3.5px;
   border-radius: 50%;
-  border: 1px solid rgba(63, 42, 21, 0.25);
-  background: #f7efe4;
+  border: 1px solid var(--scrubber-border);
+  background: var(--surface-thumb);
 }
 
 .progress-scrubber::-moz-range-thumb {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 1px solid rgba(63, 42, 21, 0.25);
-  background: #f7efe4;
+  border: 1px solid var(--scrubber-border);
+  background: var(--surface-thumb);
 }
 
 .progress-scrubber:disabled {
@@ -330,7 +381,7 @@ button {
 .preset-button.active,
 .start-button {
   background: var(--accent);
-  color: #f9f2e8;
+  color: var(--text-inverse);
   border-color: var(--accent);
 }
 
@@ -341,14 +392,14 @@ button {
   place-items: center;
   padding: 18px 18px 14px;
   overflow-y: auto;
-  background: rgba(24, 18, 12, 0.36);
+  background: var(--overlay-strong);
   backdrop-filter: none;
 }
 
 .start-layer {
   opacity: 0;
   pointer-events: none;
-  background: rgba(24, 18, 12, 0);
+  background: transparent;
   transition:
     opacity var(--motion-overlay-ms) var(--motion-soft),
     background var(--motion-overlay-ms) var(--motion-soft);
@@ -365,7 +416,7 @@ button {
 .start-layer.is-active {
   opacity: 1;
   pointer-events: auto;
-  background: rgba(24, 18, 12, 0.36);
+  background: var(--overlay-strong);
 }
 
 .start-layer.is-active .settings-sheet {
@@ -376,7 +427,7 @@ button {
 .mode-settings-layer {
   opacity: 0;
   pointer-events: none;
-  background: rgba(24, 18, 12, 0);
+  background: transparent;
   transition:
     opacity var(--motion-overlay-ms) var(--motion-soft),
     background var(--motion-overlay-ms) var(--motion-soft);
@@ -393,7 +444,7 @@ button {
 .mode-settings-layer.is-active {
   opacity: 1;
   pointer-events: auto;
-  background: rgba(24, 18, 12, 0.2);
+  background: var(--overlay-soft);
 }
 
 .mode-settings-layer.is-active .settings-sheet {
@@ -407,8 +458,8 @@ button {
   padding: 16px;
   border-radius: 22px;
   border: 1px solid var(--line);
-  background: #f6ecde;
-  box-shadow: 0 24px 72px rgba(48, 30, 15, 0.18);
+  background: var(--surface-raised);
+  box-shadow: var(--panel-shadow);
   display: grid;
   gap: 14px;
   max-height: calc(100vh - 28px);
@@ -426,7 +477,7 @@ button {
   z-index: 1;
   margin: -16px -16px 0;
   padding: 16px 64px 10px 16px;
-  background: linear-gradient(180deg, #f6ecde 78%, rgba(246, 236, 222, 0));
+  background: linear-gradient(180deg, var(--surface-raised) 78%, var(--surface-raised-fade));
 }
 
 .settings-title {
@@ -444,7 +495,7 @@ button {
   height: 36px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(255, 252, 247, 0.74);
+  background: var(--surface);
   color: var(--text);
   display: grid;
   place-items: center;
@@ -488,7 +539,7 @@ button {
 
 .field input[type="range"] {
   width: 100%;
-  accent-color: #6f4524;
+  accent-color: var(--field-accent);
 }
 
 .field input[type="number"] {
@@ -517,7 +568,7 @@ button {
 }
 
 .field-hint-error {
-  color: #8f2f24;
+  color: var(--field-error);
 }
 
 .start-button:disabled {
@@ -552,7 +603,37 @@ button {
 
 .cue-style-card.active {
   border-color: var(--accent);
-  background: rgba(77, 49, 29, 0.08);
+  background: var(--card-active);
+}
+
+.settings-group {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-group-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.settings-group-title {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.settings-group-meta {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.88;
 }
 
 @media (max-width: 640px) {
