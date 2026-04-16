@@ -73,11 +73,11 @@ type G = f64;
 type B = f64;
 
 impl SensoryCompositor {
-    fn compose(&mut self){
+    pub fn compose(&mut self){
         self.compose_color_transform_matrix();
     }
 
-    fn composite_frame(&self) -> CompositeSensoryFrame {
+    pub fn composite_frame(&self) -> CompositeSensoryFrame {
         self.composite_frame
     }
 }
