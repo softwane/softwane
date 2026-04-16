@@ -81,6 +81,7 @@ impl TimerStateMachine {
         self.state = new_state;
     }
 
+    // TODO: Think about it: use Update<TimerState> to eliminate the need for frame_flags.just_transited
     fn handle_command(&mut self, command: &StateCommand, config: &AppConfig, frame_flags: &mut FrameFlags) {
         // TODO: Add logging for `_ => {}`
         match command {
