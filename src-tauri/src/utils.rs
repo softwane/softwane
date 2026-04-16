@@ -23,7 +23,7 @@ impl<T> Update<T> {
     }
 }
 
-/// TODO: comment this
+// TODO: add explanation for the matrix
 pub type ColorTransformMatrix = Matrix5<f64>;
 
 #[cfg(test)]
