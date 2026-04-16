@@ -80,7 +80,10 @@ impl SensoryCompositor {
     fn composite_frame(&self) -> CompositeSensoryFrame {
         self.composite_frame
     }
+}
 
+// Color transformation functions
+impl SensoryCompositor {    
     fn compose_color_transform_matrix(&mut self) {
         if !self[ChannelType::Saturation].is_changed()
         && !self[ChannelType::ColorTemperature].is_changed()
@@ -197,7 +200,6 @@ impl SensoryCompositor {
         (r, g, b)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
