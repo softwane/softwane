@@ -9,7 +9,7 @@ mod configs;
 mod engine;
 mod observability;
 mod render;
-mod timer_state;
+mod timer_state_machine;
 mod tray;
 mod utils;
 mod phase;
