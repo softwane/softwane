@@ -1,12 +1,55 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import erodeMark from "./assets/erode-mark.svg";
+import { useAppearance } from "./composables/useAppearance";
 import { useTimerSession } from "./composables/useTimerSession";
 
 const isSettingsOpen = ref(false);
 const bodyMatrixValues = ref(identityMatrix().map((v) => v.toFixed(6)).join(" "));
 let bodyMatrix = identityMatrix();
 let bodyMatrixFrame = null;
+
+const cueStyleOptions = [
+  {
+    id: "dim",
+    label: "Dim fade",
+    description: "Make the screen visibly darker and ashier."
+  },
+  {
+    id: "warm",
+    label: "Warm drift",
+    description: "Balanced warmth and fade for everyday use."
+  },
+  {
+    id: "full",
+    label: "Full erosion",
+    description: "Push warmth, dimming, and washout hardest."
+  }
+];
+
+const themeModeOptions = [
+  {
+    id: "auto",
+    label: "Auto",
+    description: "Follow the system appearance and switch live."
+  },
+  {
+    id: "dark",
+    label: "Dark",
+    description: "Always keep the app in dark mode."
+  },
+  {
+    id: "light",
+    label: "Light",
+    description: "Always keep the app in light mode."
+  }
+];
+
+const {
+  resolvedTheme,
+  setThemeMode,
+  themeMode
+} = useAppearance();
 
 const {
   workDuration,
@@ -74,6 +117,26 @@ const secondaryStatusLine = computed(() => {
   return "";
 });
 
+const themeModeSummary = computed(() => {
+  if (themeMode.value === "auto") {
+    return `Auto, ${resolvedTheme.value === "dark" ? "dark now" : "light now"}`;
+  }
+
+  return `${resolvedTheme.value === "dark" ? "Dark" : "Light"} fixed`;
+});
+
+function handleProgressScrub(value) {
+  if (
+    sessionStage.value !== "Work" ||
+    sessionStatus.value !== "Running" ||
+    isEndingEarly.value ||
+    sessionIsEarlyEnding.value
+  ) {
+    return;
+  }
+
+  void setSessionProgressPercent(value);
+}
 const workDurationMessage = computed(() => {
   if (isWorkDurationSupported.value) return "";
   return "Sessions shorter than 2 minutes are unsupported.";
@@ -422,8 +485,8 @@ onUnmounted(() => {
       <div class="settings-sheet settings-page">
         <header class="settings-header">
           <div>
-            <p class="settings-kicker">Channel settings</p>
-            <h2 class="settings-title">Configure effect channels</h2>
+            <p class="settings-kicker">Mode settings</p>
+            <h2 class="settings-title">Appearance and cue</h2>
           </div>
           <button
             class="icon-button"
@@ -477,28 +540,29 @@ onUnmounted(() => {
               Shifts color temperature toward a warm amber tone.
             </p>
           </div>
+        </label>
 
-          <div class="channel-setting-card">
-            <label class="field">
-              <input
-                type="checkbox"
-                :checked="channelEnabled.brightness"
-                @change="
-                  toggleChannel('brightness', {
-                    channel_type: 'brightness',
-                    target_brightness: 0.6,
-                    curve_steepness: 8,
-                    settle_duration_ms: 6000,
-                  })
-                "
-              />
-              <strong>Brightness</strong>
-            </label>
-            <p class="channel-description">
-              Dims the overall screen brightness.
-            </p>
+        <section class="settings-group">
+          <div class="settings-group-header">
+            <span class="settings-group-title">Theme</span>
+            <span class="settings-group-meta">{{ themeModeSummary }}</span>
           </div>
-        </div>
+
+          <div class="cue-style-list" role="radiogroup" aria-label="Theme mode">
+            <button
+              v-for="option in themeModeOptions"
+              :key="option.id"
+              :class="['cue-style-card', { active: themeMode === option.id }]"
+              type="button"
+              role="radio"
+              :aria-checked="themeMode === option.id"
+              @click="setThemeMode(option.id)"
+            >
+              <strong>{{ option.label }}</strong>
+              <span>{{ option.description }}</span>
+            </button>
+          </div>
+        </section>
       </div>
     </section>
   </main>
