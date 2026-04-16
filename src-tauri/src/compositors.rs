@@ -167,6 +167,7 @@ impl SensoryCompositor {
     /// Returns channel values on a 0–255 scale.
     /// Valid range: 1000 K – 40000 K. See https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html
     // TODO: update the fitting model, referring to "/refs/Black body temperature.nb".
+    // It's from https://github.com/rgatkinson/ParticleDmxNeopixel
     fn kelvin_to_rgb(kelvin: u32) -> (R, G, B) {
         let t = kelvin.clamp(1000, 40000);
 

@@ -11,12 +11,6 @@ pub enum Update<T> {
 }
 
 impl<T> Update<T> {
-    pub fn is_changed(&self) -> bool {
-        matches!(self, Self::Changed(_))
-    }
-}
-
-impl<T> Update<T> {
     pub fn get_value(&self) -> &T {
         match self {
             Self::Changed(value) => value,
