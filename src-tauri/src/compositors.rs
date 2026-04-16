@@ -216,4 +216,6 @@ mod tests {
         let b_abs_diff = (b - 0.0).abs();
         assert!(b_abs_diff < 0.001);
     }
+
+    // TODO: Add tests for the SensoryCompositor
 }

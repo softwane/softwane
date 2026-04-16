@@ -182,3 +182,9 @@ impl TimerStateMachine {
         self.state
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    // TODO: Add tests for the timer state machine
+}
