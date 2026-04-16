@@ -68,10 +68,6 @@ impl std::ops::IndexMut<ChannelType> for SensoryCompositor {
     }
 }
 
-type R = f64;
-type G = f64;
-type B = f64;
-
 impl SensoryCompositor {
     pub fn compose(&mut self){
         self.compose_color_transform_matrix();
@@ -81,6 +77,10 @@ impl SensoryCompositor {
         self.composite_frame
     }
 }
+
+pub type R = f64;
+pub type G = f64;
+pub type B = f64;
 
 // Color transformation functions
 impl SensoryCompositor {    
