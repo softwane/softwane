@@ -1,17 +1,25 @@
 use tauri::Manager;
 
+// mod channel;
+mod channels;
 mod commands;
-mod config;
+mod compositor;
+mod compositors;
+mod configs;
 mod engine;
 mod observability;
+mod render;
+mod timer_state;
+mod tray;
+mod utils;
+mod phase;
 mod platform;
 mod session;
-mod tray;
 
 pub fn run() {
     tauri::Builder::default()
         .manage(observability::ManagedObservability::default())
-        .manage(platform::ManagedDisplayEffectApplier::default())
+        .manage(platform::ManagedPlatformAdapter::default())
         .manage(session::ManagedSessionController::default())
         .setup(|app| {
             tray::setup_tray(app.handle())?;
@@ -20,15 +28,13 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::preview_effect,
-            commands::apply_effect_snapshot,
-            session::get_timer_session_state,
-            session::start_timer_session,
-            session::toggle_pause_timer_session,
-            session::reset_timer_session,
-            session::end_timer_session_early,
-            session::update_timer_session_settings,
-            session::set_timer_session_remaining_seconds
+            commands::preview_frame,
+            commands::reset_display,
+            session::get_session_state,
+            session::start_session,
+            session::take_break_now,
+            session::start_reverse,
+            session::update_channels,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Erode App");

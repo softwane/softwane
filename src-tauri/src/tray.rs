@@ -6,25 +6,35 @@ use tauri::{
 };
 
 pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    build_tray_menu(app, "Idle", "Idle")?;
+    build_tray_menu(app, "Idle")?;
     Ok(())
 }
 
-fn build_tray_menu<R: Runtime>(
-    app: &AppHandle<R>,
-    session_stage: &str,
-    session_status: &str,
-) -> tauri::Result<()> {
-    let is_active = session_stage == "Work";
-    let is_paused = session_status == "Paused";
+fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str) -> tauri::Result<()> {
+    let is_forward = phase_label == "Forward" || phase_label == "Settling";
+    let is_sabi = phase_label == "Sabi";
 
     let show = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let pause_label = if is_paused { "Resume" } else { "Pause" };
-    let pause = MenuItem::with_id(app, "pause", pause_label, is_active, None::<&str>)?;
-    let reset = MenuItem::with_id(app, "reset", "Reset", is_active, None::<&str>)?;
+    let take_break =
+        MenuItem::with_id(app, "take_break", "Take a break now", is_forward, None::<&str>)?;
+    let stop = MenuItem::with_id(app, "stop", "Stop", is_forward, None::<&str>)?;
+    let start_reverse =
+        MenuItem::with_id(app, "start_reverse", "Return from break", is_sabi, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &separator, &pause, &reset, &separator, &quit])?;
+
+    let menu = Menu::with_items(
+        app,
+        &[
+            &show,
+            &separator,
+            &take_break,
+            &stop,
+            &start_reverse,
+            &separator,
+            &quit,
+        ],
+    )?;
 
     if let Some(tray) = app.tray_by_id("main") {
         tray.set_menu(Some(menu))?;
@@ -51,11 +61,11 @@ fn build_tray_menu<R: Runtime>(
                         let _ = window.set_focus();
                     }
                 }
-                "pause" => {
-                    let _ = app.emit("tray-pause-session", ());
+                "take_break" => {
+                    let _ = app.emit("tray-take-break", ());
                 }
-                "reset" => {
-                    let _ = app.emit("tray-reset-session", ());
+                "stop" | "start_reverse" => {
+                    let _ = app.emit("tray-start-reverse", ());
                 }
                 _ => {}
             })
@@ -87,8 +97,7 @@ pub fn update_tray_title<R: Runtime>(app: &AppHandle<R>, title: &str) {
 
 pub fn update_tray_menu<R: Runtime>(
     app: &AppHandle<R>,
-    session_stage: &str,
-    session_status: &str,
+    phase_label: &str,
 ) -> tauri::Result<()> {
-    build_tray_menu(app, session_stage, session_status)
+    build_tray_menu(app, phase_label)
 }

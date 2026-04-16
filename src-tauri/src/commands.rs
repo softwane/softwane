@@ -1,109 +1,103 @@
 use serde::Serialize;
 use serde_json::json;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::{
-    config::SessionConfig,
-    engine::{calculate_snapshot, EffectSnapshot},
+    channels::{
+        ChannelType,
+        ChannelValue,
+        CurveParameters,
+    },
+    compositor::CompositeFrame,
     observability,
-    platform::{apply_preview, ApplyResult, CueStyle, ManagedDisplayEffectApplier},
+    platform::{
+        ApplyResult,
+        ManagedPlatformAdapter,
+        apply_frame
+    },
 };
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PreviewPayload {
-    pub snapshot: EffectSnapshot,
+    pub frame: CompositeFrame,
     pub apply_result: ApplyResult,
 }
 
 #[tauri::command]
-pub fn apply_effect_snapshot(
-    phase: String,
+pub fn preview_frame(
     saturation: f32,
-    warmth_kelvin: u32,
-    cue_style: String,
-    app_handle: tauri::AppHandle,
-    applier: State<'_, ManagedDisplayEffectApplier>,
-) -> ApplyResult {
-    let snapshot = EffectSnapshot {
-        phase: parse_phase(&phase),
-        saturation,
-        warmth_kelvin,
+    color_kelvin: u32,
+    brightness: f32,
+    app_handle: AppHandle,
+    applier: State<'_, ManagedPlatformAdapter>,
+) -> PreviewPayload {
+    let frame = CompositeFrame {
+        saturation: saturation.clamp(0.0, 1.0),
+        warmth_kelvin: color_kelvin.clamp(2000, 6500),
+        brightness: brightness.clamp(0.0, 1.0),
     };
 
-    let cue_style = CueStyle::from_id(&cue_style);
-    let result = apply_preview(applier, &snapshot, cue_style);
-    log_platform_apply_result(
-        &app_handle,
-        "apply_effect_snapshot",
-        &snapshot,
-        cue_style,
-        &result,
-    );
-    result
-}
+    let apply_result = apply_frame(applier, &frame);
 
-#[tauri::command]
-pub fn preview_effect(
-    session_duration_minutes: f32,
-    remaining_minutes: f32,
-    cue_style: String,
-    app_handle: tauri::AppHandle,
-    applier: State<'_, ManagedDisplayEffectApplier>,
-) -> PreviewPayload {
-    let snapshot = calculate_snapshot(
-        &SessionConfig::default(),
-        session_duration_minutes,
-        remaining_minutes,
-    );
-    let cue_style = CueStyle::from_id(&cue_style);
-    let apply_result = apply_preview(applier, &snapshot, cue_style);
-    log_platform_apply_result(
-        &app_handle,
-        "preview_effect",
-        &snapshot,
-        cue_style,
-        &apply_result,
-    );
+    if apply_result.error.is_some() || apply_result.recovery_attempted {
+        observability::log_event(
+            &app_handle,
+            "platform_apply",
+            json!({
+                "source": "preview_frame",
+                "backend": apply_result.backend,
+                "frame": frame,
+                "applied": apply_result.applied,
+                "error": apply_result.error,
+                "recoveryAttempted": apply_result.recovery_attempted,
+            }),
+        );
+    }
 
     PreviewPayload {
-        snapshot,
+        frame,
         apply_result,
     }
 }
 
-fn log_platform_apply_result(
-    app_handle: &tauri::AppHandle,
-    source: &'static str,
-    snapshot: &EffectSnapshot,
-    cue_style: CueStyle,
-    result: &ApplyResult,
-) {
-    if result.error.is_none() && !result.recovery_attempted {
-        return;
-    }
-
-    observability::log_event(
-        app_handle,
-        "platform_apply",
-        json!({
-            "source": source,
-            "backend": result.backend,
-            "cueStyle": cue_style.as_id(),
-            "snapshot": snapshot,
-            "applied": result.applied,
-            "error": result.error,
-            "recoveryAttempted": result.recovery_attempted,
-            "recoverySucceeded": result.recovery_succeeded,
-            "recoveryError": result.recovery_error,
-        }),
-    );
+#[tauri::command]
+pub fn reset_display(
+    applier: State<'_, ManagedPlatformAdapter>,
+) -> ApplyResult {
+    apply_frame(applier, &CompositeFrame::neutral())
 }
 
-fn parse_phase(value: &str) -> crate::engine::Phase {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "jnd" => crate::engine::Phase::Jnd,
-        "evolution" => crate::engine::Phase::Evolution,
-        "statue" => crate::engine::Phase::Statue,
-        _ => crate::engine::Phase::Stable,
-    }
+pub enum StateCommand {
+    StartSession {
+        target_duration_ms: u64,
+    },
+    TakeBreakNow,
+    StopSession,
+}
+
+pub enum ChannelCommand {
+    ToggleSwitch {
+        channel_type: ChannelType,
+        switch_on: bool,
+    },
+    UpdateTargetChannelValue {
+        target_channel_value: ChannelValue,
+    },
+    UpdateProgressBeginRatio {
+        channel_type: ChannelType,
+        progress_begin_ratio: f64,  // This one should be clamped to 0.0 ~ 1.0
+    },
+    UpdateProgressCurveParas {
+        channel_type: ChannelType,
+        curve_parameters: CurveParameters,
+    },
+    UpdateSettlingCurveParas {
+        channel_type: ChannelType,
+        curve_parameters: CurveParameters,
+    },
+    UpdateReverseCurveParas {
+        channel_type: ChannelType,
+        curve_parameters: CurveParameters,
+    },
 }

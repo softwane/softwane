@@ -1,7 +1,7 @@
 use serde::Serialize;
 use tauri::State;
 
-use crate::engine::{EffectSnapshot, Phase};
+use crate::compositor::CompositeFrame;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ApplyResult {
@@ -13,37 +13,12 @@ pub struct ApplyResult {
     pub recovery_error: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CueStyle {
-    Dim,
-    Warm,
-    Full,
-}
-
-impl CueStyle {
-    pub fn from_id(value: &str) -> Self {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "color" | "dim" => Self::Dim,
-            "full" => Self::Full,
-            _ => Self::Warm,
-        }
-    }
-
-    pub fn as_id(self) -> &'static str {
-        match self {
-            Self::Dim => "dim",
-            Self::Warm => "warm",
-            Self::Full => "full",
-        }
-    }
-}
-
-pub trait DisplayEffectApplier {
+pub trait PlatformAdapter: Send + Sync {
     fn backend_name(&self) -> &'static str;
-    fn try_apply(&self, snapshot: &EffectSnapshot, cue_style: CueStyle) -> Result<bool, String>;
+    fn try_apply(&self, frame: &CompositeFrame) -> Result<bool, String>;
 
-    fn apply(&self, snapshot: &EffectSnapshot, cue_style: CueStyle) -> ApplyResult {
-        match self.try_apply(snapshot, cue_style) {
+    fn apply(&self, frame: &CompositeFrame) -> ApplyResult {
+        match self.try_apply(frame) {
             Ok(applied) => ApplyResult {
                 applied,
                 backend: self.backend_name(),
@@ -53,9 +28,9 @@ pub trait DisplayEffectApplier {
                 recovery_error: None,
             },
             Err(error) => {
-                let recovery_attempted = !is_neutral_snapshot(snapshot);
+                let recovery_attempted = !frame.is_neutral();
                 let (recovery_succeeded, recovery_error) = if recovery_attempted {
-                    match self.try_apply(&neutral_snapshot(), cue_style) {
+                    match self.try_apply(&CompositeFrame::neutral()) {
                         Ok(applied) => (applied, None),
                         Err(recovery_error) => (false, Some(recovery_error)),
                     }
@@ -76,37 +51,39 @@ pub trait DisplayEffectApplier {
     }
 }
 
-pub type ManagedDisplayEffectApplier = PlatformDisplayEffectApplier;
+pub type ManagedPlatformAdapter = PlatformDisplayAdapter;
 
-#[cfg_attr(target_os = "macos", allow(dead_code))]
 #[derive(Default)]
-pub struct MockDisplayEffectApplier;
+pub struct MockPlatformAdapter;
 
-impl DisplayEffectApplier for MockDisplayEffectApplier {
+impl PlatformAdapter for MockPlatformAdapter {
     fn backend_name(&self) -> &'static str {
         "mock"
     }
 
-    fn try_apply(&self, _snapshot: &EffectSnapshot, _cue_style: CueStyle) -> Result<bool, String> {
+    fn try_apply(&self, _frame: &CompositeFrame) -> Result<bool, String> {
         Ok(false)
     }
 }
 
 #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
-pub type PlatformDisplayEffectApplier = MockDisplayEffectApplier;
+pub type PlatformDisplayAdapter = MockPlatformAdapter;
 
 #[cfg(target_os = "macos")]
-pub type PlatformDisplayEffectApplier = MacDisplayEffectApplier;
+pub type PlatformDisplayAdapter = MacPlatformAdapter;
 
 #[cfg(target_os = "windows")]
-pub type PlatformDisplayEffectApplier = WindowsDisplayEffectApplier;
+pub type PlatformDisplayAdapter = WindowsPlatformAdapter;
 
+// ---------------------------------------------------------------------------
+// macOS: Core Graphics gamma tables
+// ---------------------------------------------------------------------------
 #[cfg(target_os = "macos")]
 mod macos {
     use std::sync::Mutex;
 
-    use super::{is_neutral_snapshot, CueStyle, DisplayEffectApplier};
-    use crate::engine::EffectSnapshot;
+    use super::PlatformAdapter;
+    use crate::compositor::CompositeFrame;
 
     type CGDirectDisplayID = u32;
     type CGDisplayCount = u32;
@@ -118,7 +95,7 @@ mod macos {
     const MAX_ACTIVE_DISPLAYS: usize = 32;
     const GAMMA_TABLE_CAPACITY: usize = 256;
     const NEUTRAL_WARMTH_KELVIN: f32 = 6500.0;
-    const MIN_WARMTH_KELVIN: f32 = 2500.0;
+    const MIN_WARMTH_KELVIN: f32 = 2000.0;
 
     #[link(name = "ApplicationServices", kind = "framework")]
     unsafe extern "C" {
@@ -159,26 +136,22 @@ mod macos {
     }
 
     #[derive(Default)]
-    pub struct MacDisplayEffectApplier {
+    pub struct MacPlatformAdapter {
         state: Mutex<MacDisplayState>,
     }
 
-    impl DisplayEffectApplier for MacDisplayEffectApplier {
+    impl PlatformAdapter for MacPlatformAdapter {
         fn backend_name(&self) -> &'static str {
             "macos-core-graphics"
         }
 
-        fn try_apply(
-            &self,
-            snapshot: &EffectSnapshot,
-            cue_style: CueStyle,
-        ) -> Result<bool, String> {
-            self.apply_snapshot(snapshot, cue_style)
+        fn try_apply(&self, frame: &CompositeFrame) -> Result<bool, String> {
+            self.apply_frame(frame)
                 .map_err(|error| error.to_string())
         }
     }
 
-    impl Drop for MacDisplayEffectApplier {
+    impl Drop for MacPlatformAdapter {
         fn drop(&mut self) {
             unsafe {
                 CGDisplayRestoreColorSyncSettings();
@@ -186,12 +159,8 @@ mod macos {
         }
     }
 
-    impl MacDisplayEffectApplier {
-        fn apply_snapshot(
-            &self,
-            snapshot: &EffectSnapshot,
-            cue_style: CueStyle,
-        ) -> Result<bool, MacDisplayError> {
+    impl MacPlatformAdapter {
+        fn apply_frame(&self, frame: &CompositeFrame) -> Result<bool, MacDisplayError> {
             let mut state = self
                 .state
                 .lock()
@@ -206,27 +175,21 @@ mod macos {
                 .as_ref()
                 .ok_or(MacDisplayError::MissingBaselines)?;
 
-            if is_neutral_snapshot(snapshot) {
+            if frame.is_neutral() {
                 unsafe {
                     CGDisplayRestoreColorSyncSettings();
                 }
                 return Ok(true);
             }
 
-            let modifiers = cue_style.modifiers();
-            let warmth =
-                (normalize_warmth(snapshot.warmth_kelvin) * modifiers.warmth).clamp(0.0, 1.0);
-            let saturation =
-                (snapshot.saturation.clamp(0.0, 1.0) * modifiers.saturation).clamp(0.0, 1.0);
-            let chroma = saturation;
-            let brightness =
-                (1.0 - warmth * modifiers.brightness_warmth).clamp(modifiers.min_brightness, 1.0);
-            let red_scale = (brightness * (1.0 + warmth * modifiers.red_boost)).clamp(0.0, 1.25);
-            let green_scale =
-                (brightness * (1.0 + warmth * modifiers.green_boost)).clamp(0.0, 1.15);
-            let blue_scale =
-                (brightness * (1.0 - warmth * modifiers.blue_reduction)).clamp(0.0, 1.0);
-            let gamma = (1.0 + (1.0 - chroma) * modifiers.gamma_chroma).clamp(1.0, 2.2);
+            let warmth = normalize_warmth(frame.warmth_kelvin);
+            let chroma = frame.saturation.clamp(0.0, 1.0);
+            let brightness_base = frame.brightness.clamp(0.0, 1.0);
+            let brightness = (brightness_base * (1.0 - warmth * 0.055)).clamp(0.5, 1.0);
+            let red_scale = (brightness * (1.0 + warmth * 0.15)).clamp(0.0, 1.25);
+            let green_scale = (brightness * (1.0 + warmth * 0.02)).clamp(0.0, 1.15);
+            let blue_scale = (brightness * (1.0 - warmth * 0.20)).clamp(0.0, 1.0);
+            let gamma = (1.0 + (1.0 - chroma) * 0.35).clamp(1.0, 2.2);
 
             for table in baseline_tables {
                 let red = transform_channel(&table.red, red_scale, gamma);
@@ -349,67 +312,24 @@ mod macos {
         EmptyTransferTable(CGDirectDisplayID),
     }
 
-    #[derive(Debug, Clone, Copy)]
-    struct MacCueStyleModifiers {
-        warmth: f32,
-        saturation: f32,
-        brightness_warmth: f32,
-        min_brightness: f32,
-        red_boost: f32,
-        green_boost: f32,
-        blue_reduction: f32,
-        gamma_chroma: f32,
-    }
-
-    impl CueStyle {
-        fn modifiers(self) -> MacCueStyleModifiers {
-            match self {
-                CueStyle::Dim => MacCueStyleModifiers {
-                    warmth: 0.18,
-                    saturation: 0.74,
-                    brightness_warmth: 0.025,
-                    min_brightness: 0.58,
-                    red_boost: 0.05,
-                    green_boost: 0.0,
-                    blue_reduction: 0.12,
-                    gamma_chroma: 0.52,
-                },
-                CueStyle::Full => MacCueStyleModifiers {
-                    warmth: 1.18,
-                    saturation: 0.88,
-                    brightness_warmth: 0.075,
-                    min_brightness: 0.66,
-                    red_boost: 0.19,
-                    green_boost: 0.03,
-                    blue_reduction: 0.28,
-                    gamma_chroma: 0.42,
-                },
-                CueStyle::Warm => MacCueStyleModifiers {
-                    warmth: 0.9,
-                    saturation: 0.97,
-                    brightness_warmth: 0.055,
-                    min_brightness: 0.74,
-                    red_boost: 0.15,
-                    green_boost: 0.02,
-                    blue_reduction: 0.2,
-                    gamma_chroma: 0.24,
-                },
-            }
-        }
-    }
-
-    pub use MacDisplayEffectApplier as PublicMacDisplayEffectApplier;
+    pub use MacPlatformAdapter as PublicMacPlatformAdapter;
 }
 
 #[cfg(target_os = "macos")]
-pub use macos::PublicMacDisplayEffectApplier as MacDisplayEffectApplier;
+pub use macos::PublicMacPlatformAdapter as MacPlatformAdapter;
 
+// ---------------------------------------------------------------------------
+// Windows: Magnification API fullscreen color matrix
+// ---------------------------------------------------------------------------
 #[cfg(target_os = "windows")]
 mod windows {
     use std::sync::Mutex;
 
-    use super::{CueStyle, DisplayEffectApplier, is_neutral_snapshot};
-    use crate::engine::EffectSnapshot;
+    use super::PlatformAdapter;
+    use crate::compositor::CompositeFrame;
+
+    const NEUTRAL_WARMTH_KELVIN: f32 = 6500.0;
+    const MIN_WARMTH_KELVIN: f32 = 2000.0;
 
     #[derive(Default)]
     struct WindowsState {
@@ -418,46 +338,38 @@ mod windows {
     }
 
     #[derive(Default)]
-    pub struct WindowsDisplayEffectApplier {
+    pub struct WindowsPlatformAdapter {
         state: Mutex<WindowsState>,
     }
 
-    impl DisplayEffectApplier for WindowsDisplayEffectApplier {
+    impl PlatformAdapter for WindowsPlatformAdapter {
         fn backend_name(&self) -> &'static str {
             "windows-magnification"
         }
 
-        fn try_apply(
-            &self,
-            snapshot: &EffectSnapshot,
-            cue_style: CueStyle,
-        ) -> Result<bool, String> {
-            self.apply_snapshot(snapshot, cue_style)
+        fn try_apply(&self, frame: &CompositeFrame) -> Result<bool, String> {
+            self.apply_frame(frame)
                 .map_err(|error| error.to_string())
         }
     }
 
-    impl Drop for WindowsDisplayEffectApplier {
+    impl Drop for WindowsPlatformAdapter {
         fn drop(&mut self) {
             let _ = self.restore_identity();
             let _ = self.uninitialize();
         }
     }
 
-    impl WindowsDisplayEffectApplier {
-        fn apply_snapshot(
-            &self,
-            snapshot: &EffectSnapshot,
-            cue_style: CueStyle,
-        ) -> Result<bool, WindowsDisplayError> {
-            if is_neutral_snapshot(snapshot) {
+    impl WindowsPlatformAdapter {
+        fn apply_frame(&self, frame: &CompositeFrame) -> Result<bool, WindowsDisplayError> {
+            if frame.is_neutral() {
                 self.restore_identity()?;
                 return Ok(true);
             }
 
             self.ensure_initialized()?;
 
-            let matrix = snapshot_to_matrix(snapshot, cue_style);
+            let matrix = frame_to_matrix(frame);
             self.set_fullscreen_color_effect(matrix)?;
             Ok(true)
         }
@@ -566,12 +478,11 @@ mod windows {
         out
     }
 
-    // Matrices follow the GDI+ convention referenced by MAGCOLOREFFECT:
-    // color vector (r,g,b,a,1) is multiplied on the left: v' = v * M.
+    // GDI+ convention: color vector (r,g,b,a,1) * M
     fn saturation_matrix(saturation: f32) -> [[f32; 5]; 5] {
         let s = saturation.clamp(0.0, 1.0);
         let lr = 0.2126;
-        let lg = 0.7;
+        let lg = 0.7152;
         let lb = 0.0722;
         let inv = 1.0 - s;
         [
@@ -609,55 +520,19 @@ mod windows {
     }
 
     fn normalize_warmth(warmth_kelvin: u32) -> f32 {
-        let neutral = 6500.0;
-        let min = 2500.0;
-        ((neutral - warmth_kelvin as f32) / (neutral - min)).clamp(0.0, 1.0)
+        ((NEUTRAL_WARMTH_KELVIN - warmth_kelvin as f32)
+            / (NEUTRAL_WARMTH_KELVIN - MIN_WARMTH_KELVIN))
+            .clamp(0.0, 1.0)
     }
 
-    #[derive(Debug, Clone, Copy)]
-    struct WindowsCueStyleModifiers {
-        warmth: f32,
-        saturation: f32,
-        brightness_warmth: f32,
-        min_brightness: f32,
-    }
-
-    impl CueStyle {
-        fn modifiers_windows(self) -> WindowsCueStyleModifiers {
-            match self {
-                CueStyle::Dim => WindowsCueStyleModifiers {
-                    warmth: 0.18,
-                    saturation: 0.74,
-                    brightness_warmth: 0.14,
-                    min_brightness: 0.58,
-                },
-                CueStyle::Full => WindowsCueStyleModifiers {
-                    warmth: 1.18,
-                    saturation: 0.88,
-                    brightness_warmth: 0.07,
-                    min_brightness: 0.66,
-                },
-                CueStyle::Warm => WindowsCueStyleModifiers {
-                    warmth: 0.9,
-                    saturation: 0.97,
-                    brightness_warmth: 0.06,
-                    min_brightness: 0.74,
-                },
-            }
-        }
-    }
-
-    fn snapshot_to_matrix(snapshot: &EffectSnapshot, cue_style: CueStyle) -> [[f32; 5]; 5] {
-        if is_neutral_snapshot(snapshot) {
+    fn frame_to_matrix(frame: &CompositeFrame) -> [[f32; 5]; 5] {
+        if frame.is_neutral() {
             return identity_matrix();
         }
 
-        let m = cue_style.modifiers_windows();
-        let warmth = (normalize_warmth(snapshot.warmth_kelvin) * m.warmth).clamp(0.0, 1.0);
-        let raw_sat = snapshot.saturation.clamp(0.0, 1.0);
-        let sat_modifier = m.saturation + (1.0 - m.saturation) * raw_sat;
-        let saturation = (raw_sat * sat_modifier).clamp(0.0, 1.0);
-        let brightness = (1.0 - warmth * m.brightness_warmth).clamp(m.min_brightness, 1.0);
+        let warmth = normalize_warmth(frame.warmth_kelvin);
+        let saturation = frame.saturation.clamp(0.0, 1.0);
+        let brightness = frame.brightness.clamp(0.0, 1.0);
 
         let ms = saturation_matrix(saturation);
         let mw = warmth_matrix(warmth);
@@ -687,9 +562,7 @@ mod windows {
 
     #[cfg(test)]
     mod tests {
-        use super::{identity_matrix, matrix_nearly_equal, snapshot_to_matrix};
-        use crate::engine::{EffectSnapshot, Phase};
-        use crate::platform::CueStyle;
+        use super::*;
 
         #[test]
         fn identity_is_stable() {
@@ -701,54 +574,34 @@ mod windows {
         }
 
         #[test]
-        fn snapshot_matrix_is_finite() {
-            let snapshot = EffectSnapshot {
-                phase: Phase::Evolution,
+        fn frame_matrix_is_finite() {
+            let frame = CompositeFrame {
                 saturation: 0.5,
                 warmth_kelvin: 4000,
+                brightness: 0.8,
             };
-            let m = snapshot_to_matrix(&snapshot, CueStyle::Warm);
+            let m = frame_to_matrix(&frame);
             for v in m.iter().flatten() {
                 assert!(v.is_finite());
             }
         }
 
         #[test]
-        fn neutral_like_snapshot_is_close_to_identity() {
-            let snapshot = EffectSnapshot {
-                phase: Phase::Stable,
-                saturation: 1.0,
-                warmth_kelvin: 6500,
-            };
-            let m = snapshot_to_matrix(&snapshot, CueStyle::Warm);
+        fn neutral_frame_produces_identity() {
+            let m = frame_to_matrix(&CompositeFrame::neutral());
             assert!(matrix_nearly_equal(&m, &identity_matrix(), 0.001));
         }
     }
 
-    pub use WindowsDisplayEffectApplier as PublicWindowsDisplayEffectApplier;
+    pub use WindowsPlatformAdapter as PublicWindowsPlatformAdapter;
 }
 
 #[cfg(target_os = "windows")]
-pub use windows::PublicWindowsDisplayEffectApplier as WindowsDisplayEffectApplier;
+pub use windows::PublicWindowsPlatformAdapter as WindowsPlatformAdapter;
 
-pub fn apply_preview(
-    applier: State<'_, ManagedDisplayEffectApplier>,
-    snapshot: &EffectSnapshot,
-    cue_style: CueStyle,
+pub fn apply_frame(
+    adapter: State<'_, ManagedPlatformAdapter>,
+    frame: &CompositeFrame,
 ) -> ApplyResult {
-    applier.apply(snapshot, cue_style)
-}
-
-fn neutral_snapshot() -> EffectSnapshot {
-    EffectSnapshot {
-        phase: Phase::Stable,
-        saturation: 1.0,
-        warmth_kelvin: 6500,
-    }
-}
-
-fn is_neutral_snapshot(snapshot: &EffectSnapshot) -> bool {
-    snapshot.phase == Phase::Stable
-        && (snapshot.saturation - 1.0).abs() <= 0.001
-        && snapshot.warmth_kelvin >= 6500
+    adapter.apply(frame)
 }
