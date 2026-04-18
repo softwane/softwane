@@ -251,9 +251,29 @@ macro_rules! define_channels {
             }
         }
 
+        macro_rules! impl_channel_array_type_index {
+            ($array_type:ty, $output_type:ty) => {
+                impl std::ops::Index<ChannelType> for $array_type {
+                    type Output = $output_type;
+                    fn index(&self, index: ChannelType) -> &Self::Output {
+                        &self[index as usize]
+                    }
+                }
+                impl std::ops::IndexMut<ChannelType> for $array_type {
+                    fn index_mut(&mut self, index: ChannelType) -> &mut Self::Output {
+                        &mut self[index as usize]
+                    }
+                }
+            }
+        }
+
         pub type AllChannelsConfigs = [ChannelConfigs; SENSORY_CHANNELS_COUNT];
         pub type SensoryChannels = [SensoryChannel; SENSORY_CHANNELS_COUNT];
         pub type LogicFrame = [Update<ChannelValue>; SENSORY_CHANNELS_COUNT];
+
+        impl_channel_array_type_index!(AllChannelsConfigs, ChannelConfigs);
+        impl_channel_array_type_index!(SensoryChannels, SensoryChannel);
+        impl_channel_array_type_index!(LogicFrame, Update<ChannelValue>);
 
         /// Macro to implement binary operations for [`ChannelValue`].
         macro_rules! impl_channel_binop {
