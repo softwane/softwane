@@ -172,7 +172,7 @@ impl SensoryChannel {
         };
         // begin + (target - begin) * curve_intensity, but in order to avoid overflow, we use the following formula
         // begin * (1 - curve_intensity) + target * curve_intensity
-        func_params.curve_begin_value * (1 - curve_intensity) + func_params.target_value * curve_intensity
+        func_params.curve_begin_value * (1.0 - curve_intensity) + func_params.target_value * curve_intensity
     }
 
     pub fn tick(&mut self, state: TimerState, frame_flags: &FrameFlags) {
@@ -339,8 +339,12 @@ mod curve_functions {
         let low = sigmoid(0.0, steepness);
         let high = sigmoid(1.0, steepness);
         let raw = sigmoid(x, steepness);
-    
-        let result = (raw - low) / (high - low);
+
+        // equivalent to (raw - low) / (high - low),
+        // but in order to reduce the error, we use the following formula
+        // ((raw^2 - low^2) * (high + low)) / ((raw + low) * (high^2 - low^2))
+        let result = ((raw.powi(2) - low.powi(2)) * (high + low))
+                        / ((raw + low) * (high.powi(2) - low.powi(2)));
         result.clamp(0.0, 1.0)
     }
 }
