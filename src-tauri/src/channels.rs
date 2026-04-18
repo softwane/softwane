@@ -105,13 +105,13 @@ pub struct SensoryChannel {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct SensoryChannelConfigs {
+pub struct ChannelConfigs {
     switch_on: bool,
     persistent_params_mat: PersistentChannelFuncParamsMatrix,
 }
 
 impl SensoryChannel {
-    pub fn new(config: SensoryChannelConfigs) -> Self {
+    pub fn new(config: ChannelConfigs) -> Self {
         let channel_type: ChannelType = config.persistent_params_mat.target_channel_value.into();
         Self {
             channel_type: channel_type,
@@ -122,8 +122,8 @@ impl SensoryChannel {
         }
     }
 
-    pub fn persist(&self) -> SensoryChannelConfigs {
-        SensoryChannelConfigs {
+    pub fn persist(&self) -> ChannelConfigs {
+        ChannelConfigs {
             switch_on: self.switch_on,
             persistent_params_mat: self.function_params_matrix.persist(),
         }
@@ -227,7 +227,6 @@ macro_rules! define_channels {
         }
 
         pub const SENSORY_CHANNELS_COUNT: usize = [$(ChannelType::$type_var,)*].len();
-
         pub const SENSORY_CHANNEL_TYPES: [ChannelType; SENSORY_CHANNELS_COUNT] = [$(ChannelType::$type_var,)*];
 
         impl ChannelType {
@@ -251,6 +250,10 @@ macro_rules! define_channels {
                 }
             }
         }
+
+        pub type AllChannelsConfigs = [ChannelConfigs; SENSORY_CHANNELS_COUNT];
+        pub type SensoryChannels = [SensoryChannel; SENSORY_CHANNELS_COUNT];
+        pub type LogicFrame = [Update<ChannelValue>; SENSORY_CHANNELS_COUNT];
 
         /// Macro to implement binary operations for [`ChannelValue`].
         macro_rules! impl_channel_binop {
@@ -287,11 +290,9 @@ macro_rules! define_channels {
             }
         }
 
-        pub type SensoryChannelsConfigs = [SensoryChannelConfigs; SENSORY_CHANNELS_COUNT];
-
-        pub const DEFAULT_SENSORY_CHANNELS_CONFIGS: SensoryChannelsConfigs = [
+        pub const DEFAULT_ALL_CHANNELS_CONFIGS: AllChannelsConfigs = [
             $( 
-                SensoryChannelConfigs {
+                ChannelConfigs {
                     switch_on: $switch_on,
                     persistent_params_mat: PersistentChannelFuncParamsMatrix {
                         progress_curve_parameters: CurveParameters::NormalizedSigmoid { steepness: DEFAULT_SIGMOID_STEEPNESS },
@@ -303,9 +304,6 @@ macro_rules! define_channels {
                 },
             )*
         ];
-
-        pub type SensoryChannels = [SensoryChannel; SENSORY_CHANNELS_COUNT];
-
     }
 }
 
