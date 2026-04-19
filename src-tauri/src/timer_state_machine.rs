@@ -50,7 +50,7 @@ pub const SABI_STATE: TimerState = TimerState::Sabi;
 pub const REVERSE_STATE: TimerState = TimerState::Reverse { elapsed_ms: 0, target_duration_ms: 0 };
 
 impl TimerState {
-    pub fn label(&self) -> &'static str {
+    pub const fn label(&self) -> &'static str {
         match self {
             Self::Idle => "Idle",
             Self::Progress { .. } => "Progress",

@@ -230,9 +230,9 @@ macro_rules! define_channels {
         pub const SENSORY_CHANNEL_TYPES: [ChannelType; SENSORY_CHANNELS_COUNT] = [$(ChannelType::$type_var,)*];
 
         impl ChannelType {
-            pub fn neutral_value(&self) -> ChannelValue {
+            pub const fn neutral_value(&self) -> ChannelValue {
                 match self {
-                    $( ChannelType::$type_var => ChannelValue::$val_var(<$data_type>::from($val_neutral)), )*
+                    $( ChannelType::$type_var => ChannelValue::$val_var($val_neutral), )*
                 }
             }
         }
@@ -319,7 +319,7 @@ macro_rules! define_channels {
                         settling_curve_parameters: CurveParameters::NormalizedSigmoid { steepness: DEFAULT_SIGMOID_STEEPNESS },
                         reverse_curve_parameters: CurveParameters::NormalizedSigmoid { steepness: DEFAULT_SIGMOID_STEEPNESS },
                         progress_begin_ratio: DEFAULT_PROGRESS_BEGIN_RATIO,
-                        target_channel_value: ChannelValue::$val_var(<$data_type>::from($default_target)),
+                        target_channel_value: ChannelValue::$val_var($default_target),
                     },
                 },
             )*
@@ -331,15 +331,15 @@ const DEFAULT_PROGRESS_BEGIN_RATIO: f64 = 0.9;
 
 #[cfg(target_os = "windows")]
 define_channels!(
-    Saturation(default_on=true)       => Saturation(f64, neutral=1.0, default_target=0.2);
-    ColorTemperature(default_on=true) => ColorKelvin(u32, neutral=6500, default_target=2500);
-    Brightness(default_on=false)      => Brightness(f64, neutral=1.0, default_target=0.6);
+    Saturation(default_on=true)       => Saturation(f64, neutral=1.0f64, default_target=0.2f64);
+    ColorTemperature(default_on=true) => ColorKelvin(u32, neutral=6500u32, default_target=2500u32);
+    Brightness(default_on=false)      => Brightness(f64, neutral=1.0f64, default_target=0.6f64);
 );
 
 #[cfg(target_os = "macos")]
 define_channels!(
-    ColorTemperature(default_on=true) => ColorKelvin(u32, neutral=6500, default_target=2500);
-    Brightness(default_on=false)      => Brightness(f64, neutral=1.0, default_target=0.6);
+    ColorTemperature(default_on=true) => ColorKelvin(u32, neutral=6500u32, default_target=2500u32);
+    Brightness(default_on=false)      => Brightness(f64, neutral=1.0f64, default_target=0.6f64);
 );
 
 
