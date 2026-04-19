@@ -8,7 +8,7 @@ mod configs;
 mod engine;
 mod events;
 mod observability;
-mod render;
+mod renderer;
 mod timer_state_machine;
 mod tray;
 mod utils;

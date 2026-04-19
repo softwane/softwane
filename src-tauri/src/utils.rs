@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
-use nalgebra::{
-    Matrix5,
-};
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -23,8 +21,6 @@ impl<T> Update<T> {
     }
 }
 
-// TODO: add explanation for the matrix
-pub type ColorTransformMatrix = Matrix5<f64>;
 
 #[cfg(test)]
 mod tests {

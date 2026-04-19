@@ -329,8 +329,15 @@ macro_rules! define_channels {
 
 const DEFAULT_PROGRESS_BEGIN_RATIO: f64 = 0.9;
 
+#[cfg(target_os = "windows")]
 define_channels!(
     Saturation(default_on=true)       => Saturation(f64, neutral=1.0, default_target=0.2);
+    ColorTemperature(default_on=true) => ColorKelvin(u32, neutral=6500, default_target=2500);
+    Brightness(default_on=false)      => Brightness(f64, neutral=1.0, default_target=0.6);
+);
+
+#[cfg(target_os = "macos")]
+define_channels!(
     ColorTemperature(default_on=true) => ColorKelvin(u32, neutral=6500, default_target=2500);
     Brightness(default_on=false)      => Brightness(f64, neutral=1.0, default_target=0.6);
 );
