@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commands::ChannelCommand,
+    events::ChannelCommand,
     engine::FrameFlags,
     timer_state_machine::*,
     utils::*,

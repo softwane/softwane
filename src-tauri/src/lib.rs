@@ -2,11 +2,11 @@ use tauri::Manager;
 
 // mod channel;
 mod channels;
-mod commands;
 mod compositor;
 mod compositors;
 mod configs;
 mod engine;
+mod events;
 mod observability;
 mod render;
 mod timer_state_machine;

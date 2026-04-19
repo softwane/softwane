@@ -1,6 +1,6 @@
 use std::mem::discriminant;
 use crate::configs::AppConfig;
-use crate::commands::StateCommand;
+use crate::events::StateCommand;
 use crate::engine::FrameFlags;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
