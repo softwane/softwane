@@ -52,8 +52,8 @@ impl Rendering for Renderer {
 // WindowsColorTransformer
 // ---------------------------------------------------------------------------
 
-/// Tracks per-frame colour transformation state for the Windows Magnification
-/// API back-end.
+/// Sub-renderer that tracks per-frame colour transformation state
+/// for the Windows Magnification API back-end.
 #[derive(Debug, Clone)]
 struct WindowsColorTransformer {
     name: &'static str,
@@ -101,6 +101,9 @@ impl WindowsColorTransformer {
                 );
             }
         }
+        // TODO: If we wnat to be compatible with other Apps using Magnification API,
+        // we could use Bv = DAv => D = BA^-1, where A is the last applied matrix and B is the new matrix.
+        // Because we could get A from the API: https://learn.microsoft.com/en-us/windows/win32/api/magnification/nf-magnification-maggetfullscreencoloreffect
     }
 
     /// Recomputes `cached_color_transform_matrix` from the three channel values.
