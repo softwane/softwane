@@ -203,8 +203,8 @@ impl TimerStateMachine {
         }
     }
 
-    pub fn tick(&mut self, dt_ms: u64, fe: &mut FrameEvents) {
-        if fe.just_transited {
+    pub fn tick(&mut self, dt_ms: u64, frame_events: &mut FrameEvents) {
+        if frame_events.just_transited {
             return;
         }
         match self.state {
@@ -216,7 +216,7 @@ impl TimerStateMachine {
             } => {
                 if elapsed_ms + dt_ms >= target_duration_ms {
                     self.transit(TimerState::Sabi);
-                    fe.just_transited = true;
+                    frame_events.just_transited = true;
                 } else {
                     self.transit(TimerState::Progress {
                         elapsed_ms: elapsed_ms + dt_ms,
@@ -230,7 +230,7 @@ impl TimerStateMachine {
             } => {
                 if elapsed_ms + dt_ms >= target_duration_ms {
                     self.transit(TimerState::Sabi);
-                    fe.just_transited = true;
+                    frame_events.just_transited = true;
                 } else {
                     self.transit(TimerState::Settling {
                         elapsed_ms: elapsed_ms + dt_ms,
@@ -244,7 +244,7 @@ impl TimerStateMachine {
             } => {
                 if elapsed_ms + dt_ms >= target_duration_ms {
                     self.transit(TimerState::Idle);
-                    fe.just_transited = true;
+                    frame_events.just_transited = true;
                 } else {
                     self.transit(TimerState::Reverse {
                         elapsed_ms: elapsed_ms + dt_ms,
