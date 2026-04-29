@@ -185,6 +185,8 @@ impl SensoryChannel {
                 TimerState::Sabi => {
                     self.function_params_matrix[SETTLING_STATE].target_value
                 }
+                // TODO(B3): Preview should compute channel value at the given progress.
+                TimerState::Preview { .. } => self.channel_type.neutral_value(),
                 TimerState::Progress { .. } => {
                     self.calculate_this_value(state)
                 }
