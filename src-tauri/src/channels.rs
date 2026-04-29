@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     events::ChannelCommand,
-    engine::FrameFlags,
+    engine::FrameEvents,
     timer_state_machine::*,
     utils::*,
 };
@@ -58,9 +58,9 @@ impl ChannelFuncParamsMatrix {
     }
 
     pub fn persist(&self) -> PersistentChannelFuncParamsMatrix {
-        let progress_params = self[&PROGRESS_STATE];
-        let settling_params = self[&SETTLING_STATE];
-        let reverse_params = self[&REVERSE_STATE];
+        let progress_params = self[PROGRESS_STATE].clone();
+        let settling_params = self[SETTLING_STATE].clone();
+        let reverse_params = self[REVERSE_STATE].clone();
         PersistentChannelFuncParamsMatrix {
             progress_curve_parameters: progress_params.curve_parameters,
             settling_curve_parameters: settling_params.curve_parameters,
@@ -103,7 +103,7 @@ pub struct SensoryChannel {
     current_value: Update<ChannelValue>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ChannelConfigs {
     switch_on: bool,
@@ -132,23 +132,23 @@ impl SensoryChannel {
     pub fn handle_command(&mut self, command: ChannelCommand) {
         match command {
             ChannelCommand::ToggleSwitch { channel_type: _, switch_on } => {
-                self.switch_on = *switch_on;
+                self.switch_on = switch_on;
             }
             ChannelCommand::UpdateTargetChannelValue { target_channel_value } => {
-                self.function_params_matrix[PROGRESS_STATE].target_value = *target_channel_value;
-                self.function_params_matrix[SETTLING_STATE].target_value = *target_channel_value;
+                self.function_params_matrix[PROGRESS_STATE].target_value = target_channel_value;
+                self.function_params_matrix[SETTLING_STATE].target_value = target_channel_value;
             }
             ChannelCommand::UpdateProgressBeginRatio { channel_type: _, progress_begin_ratio } => {
-                self.function_params_matrix[PROGRESS_STATE].curve_begin_ratio = *progress_begin_ratio;
+                self.function_params_matrix[PROGRESS_STATE].curve_begin_ratio = progress_begin_ratio;
             }
             ChannelCommand::UpdateProgressCurveParas { channel_type: _, curve_parameters } => {
-                self.function_params_matrix[PROGRESS_STATE].curve_parameters = *curve_parameters;
+                self.function_params_matrix[PROGRESS_STATE].curve_parameters = curve_parameters;
             }
             ChannelCommand::UpdateSettlingCurveParas { channel_type: _, curve_parameters } => {
-                self.function_params_matrix[SETTLING_STATE].curve_parameters = *curve_parameters;
+                self.function_params_matrix[SETTLING_STATE].curve_parameters = curve_parameters;
             }
             ChannelCommand::UpdateReverseCurveParas { channel_type: _, curve_parameters } => {
-                self.function_params_matrix[REVERSE_STATE].curve_parameters = *curve_parameters;
+                self.function_params_matrix[REVERSE_STATE].curve_parameters = curve_parameters;
             }
         }
     }
@@ -175,13 +175,13 @@ impl SensoryChannel {
         func_params.curve_begin_value * (1.0 - curve_intensity) + func_params.target_value * curve_intensity
     }
 
-    pub fn tick(&mut self, state: TimerState, frame_flags: &FrameFlags) {
+    pub fn tick(&mut self, state: TimerState, frame_flags: &FrameEvents) {
         let this_value: ChannelValue;
         if !self.switch_on {
-            this_value = self.channel_type().neutral_value();
+            this_value = self.channel_type.neutral_value();
         } else {
             this_value = match state {
-                TimerState::Idle => self.channel_type().neutral_value(),
+                TimerState::Idle => self.channel_type.neutral_value(),
                 TimerState::Sabi => {
                     self.function_params_matrix[SETTLING_STATE].target_value
                 }
@@ -270,11 +270,13 @@ macro_rules! define_channels {
         pub type AllChannelsConfigs = [ChannelConfigs; SENSORY_CHANNELS_COUNT];
         pub type SensoryChannels = [SensoryChannel; SENSORY_CHANNELS_COUNT];
         pub type LogicFrame = [Update<ChannelValue>; SENSORY_CHANNELS_COUNT];
+        pub type ChannelSwitchStates = [bool; SENSORY_CHANNELS_COUNT];
 
         impl_channel_array_type_index!(AllChannelsConfigs, ChannelConfigs);
         impl_channel_array_type_index!(SensoryChannels, SensoryChannel);
         impl_channel_array_type_index!(LogicFrame, Update<ChannelValue>);
-
+        impl_channel_array_type_index!(ChannelSwitchStates, bool);
+        
         /// Macro to implement binary operations for [`ChannelValue`].
         macro_rules! impl_channel_binop {
             ($binop_trait:ident, $binop_method:ident, $op:tt) => {
@@ -342,6 +344,10 @@ define_channels!(
     Brightness(default_on=false)      => Brightness(f64, neutral=1.0f64, default_target=0.6f64);
 );
 
+// TODO: 用容差实现ParitialEq for ChannelValue
+impl Eq for ChannelValue {
+
+}
 
 mod curve_functions {
     use serde::{Deserialize, Serialize};
@@ -359,7 +365,7 @@ mod curve_functions {
         1.0 / (1.0 + f64::exp(-steepness * (x - 0.5)))
     }
     pub(super) fn normalized_sigmoid(x: f64, steepness: f64) -> f64 {
-        debug_assert!(0.0 <= x && x <= 1.0, "x must be in [0, 1], but got {}", x);    
+        debug_assert!(0.0 <= x && x <= 1.0, "x must be in [0, 1], but got {}", x);
 
         let low = sigmoid(0.0, steepness);
         let high = sigmoid(1.0, steepness);
@@ -378,4 +384,5 @@ mod curve_functions {
 #[cfg(test)]
 mod tests {
     // TODO: Add tests for the channels
+    // TODO: TOO MANY clamps! We need to test the math.
 }

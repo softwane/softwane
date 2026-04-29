@@ -1,7 +1,6 @@
-use std::mem::discriminant;
 use crate::configs::AppConfig;
 use crate::events::StateCommand;
-use crate::engine::FrameFlags;
+use crate::engine::FrameEvents;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimerState {
@@ -63,26 +62,20 @@ impl TimerState {
 
 pub struct TimerStateMachine {
     state: TimerState,
-    cerrent_elapsed_ms: u64,
 }
 
 impl TimerStateMachine {
     pub fn new() -> Self {
         Self {
             state: TimerState::Idle,
-            cerrent_elapsed_ms: 0,
         }
     }
 
     fn transit(&mut self, new_state: TimerState) {
-        if discriminant(&self.state) != discriminant(&new_state) {
-            self.cerrent_elapsed_ms = 0;
-        }
         self.state = new_state;
     }
 
-    // TODO: Think about it: use Update<TimerState> to eliminate the need for frame_flags.just_transited
-    fn handle_command(&mut self, command: &StateCommand, config: &AppConfig, frame_flags: &mut FrameFlags) {
+    fn handle_command(&mut self, command: &StateCommand, config: &AppConfig, frame_flags: &mut FrameEvents) {
         // TODO: Add logging for `_ => {}`
         match command {
             StateCommand::StartSession { target_duration_ms } => {
@@ -123,12 +116,14 @@ impl TimerStateMachine {
                     _ => {}
                 }
             },
+            StateCommand::EnterPreview
+            | StateCommand::ExitPreview
+            | StateCommand::UpdatePreviewProgress { .. } => {}
         }
     }
 
-    fn update(&mut self, dt_ms: u64, frame_flags: &mut FrameFlags) {
+    fn update(&mut self, dt_ms: u64, frame_flags: &mut FrameEvents) {
         if !frame_flags.just_transited { 
-            self.cerrent_elapsed_ms += dt_ms;
             match self.state {
                 TimerState::Progress { elapsed_ms, target_duration_ms } => {
                     if elapsed_ms + dt_ms >= target_duration_ms {
@@ -168,15 +163,11 @@ impl TimerStateMachine {
         }
     }
 
-    pub fn tick(&mut self, dt_ms: u64, frame_flags: &mut FrameFlags, commands: &Vec<StateCommand>, config: &AppConfig,) {
+    pub fn tick(&mut self, dt_ms: u64, frame_flags: &mut FrameEvents, commands: &Vec<StateCommand>, config: &AppConfig,) {
         for command in commands {
             self.handle_command(command, config, frame_flags);
         }
         self.update(dt_ms, frame_flags);
-    }
-
-    pub fn current_elapsed_ms(&self) -> u64 {
-        self.cerrent_elapsed_ms
     }
 
     pub fn state(&self) -> TimerState {

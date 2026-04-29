@@ -7,7 +7,7 @@ use nalgebra::Matrix5;
 use tokio::sync::mpsc::{Sender, error::SendError};
 
 use crate::{
-    channels::{ChannelType, ChannelValue, LogicFrame},
+    channels::{ChannelSwitchStates, ChannelType, ChannelValue, LogicFrame},
     events::RendererEvent,
 };
 
@@ -20,6 +20,7 @@ pub use self::macos::*;
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "windows")]
+#[allow(unused_imports)]
 pub use self::windows::*;
 
 
@@ -27,6 +28,19 @@ pub trait Rendering {
     fn render(
         &mut self,
         logic_frame: Arc<LogicFrame>,
+        app: &AppHandle,
+    );
+
+    // Used when exiting the app.
+    fn try_shutdown(&mut self, app: &AppHandle);
+
+    // Used by user to reset the renderer to the initial state.
+    fn try_reset(&mut self, app: &AppHandle);
+
+    // Used when the channel switch states change.
+    fn switch_subrenderer_states(
+        &mut self,
+        channel_switch_states: ChannelSwitchStates,
         app: &AppHandle,
     );
 }
@@ -58,27 +72,27 @@ fn kelvin_to_rgb(kelvin: u32) -> (R, G, B) {
         _ => unreachable!(),
     };
 
-    const R_FUNCTION: fn(u32) -> R = |t: u32| -> R {
+    fn r_function(t: u32) -> R {
         if t <= 6600 {
             255.0
         } else {
             (329.698727446 * (((t - 6000)/100) as f64).powf(-0.1332047592)).clamp(0.0, 255.0)
         }
-    };
-    let r = R_FUNCTION(t);
-    const R_D65: R = R_FUNCTION(T_D65);
+    }
+    let r = r_function(t);
+    let r_d65: R = r_function(T_D65);
 
-    const G_FUNCTION: fn(u32) -> G = |t: u32| -> G {
+    fn g_function(t: u32) -> G {
         if t <= 6600 {
-            (99.4708025861 * (t/100 as f64).ln() - 161.1195681661).clamp(0.0, 255.0)
+            (99.4708025861 * ((t/100) as f64).ln() - 161.1195681661).clamp(0.0, 255.0)
         } else {
             (288.1221695283 * (((t - 6000)/100) as f64).powf(-0.0755148492)).clamp(0.0, 255.0)
         }
-    };
-    let g = G_FUNCTION(t);
-    const G_D65: G = G_FUNCTION(T_D65);
+    }
+    let g = g_function(t);
+    let g_d65: G = g_function(T_D65);
 
-    const B_FUNCTION: fn(u32) -> B = |t: u32| -> B {
+    fn b_function(t: u32) -> B {
         if t >= 6600 {
             255.0
         } else if t <= 1900 {
@@ -86,14 +100,14 @@ fn kelvin_to_rgb(kelvin: u32) -> (R, G, B) {
         } else {
             (138.5177312231 * (((t - 1000)/100) as f64).ln() - 305.0447927307).clamp(0.0, 255.0)
         }
-    };
-    let b = B_FUNCTION(t);
-    const B_D65: B = B_FUNCTION(T_D65);
+    }
+    let b = b_function(t);
+    let b_d65: B = b_function(T_D65);
 
     (
-        (r / R_D65).clamp(0.0, 1.0),
-        (g / G_D65).clamp(0.0, 1.0),
-        (b / B_D65).clamp(0.0, 1.0),
+        (r / r_d65).clamp(0.0, 1.0),
+        (g / g_d65).clamp(0.0, 1.0),
+        (b / b_d65).clamp(0.0, 1.0),
     )
 }
 

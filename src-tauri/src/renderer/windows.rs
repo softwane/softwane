@@ -46,6 +46,23 @@ impl Rendering for Renderer {
 
         // Future render logic will be added here
     }
+
+    fn try_shutdown(&mut self, _app: &AppHandle) {
+        // B4.1: dispatch identity matrix + MagUninitialize on main thread with timeout.
+    }
+
+    fn try_reset(&mut self, _app: &AppHandle) {
+        self.color_transformer = WindowsColorTransformer::default();
+        // B4.1
+    }
+
+    fn switch_subrenderer_states(
+        &mut self,
+        _channel_switch_states: ChannelSwitchStates,
+        _app: &AppHandle,
+    ) {
+        // Single Windows colour-transform sub-renderer for now.
+    }
 }
 
 // ---------------------------------------------------------------------------

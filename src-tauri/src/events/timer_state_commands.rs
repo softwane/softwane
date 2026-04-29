@@ -4,4 +4,9 @@ pub enum StateCommand {
     },
     TakeBreakNow,
     StopSession,
+    EnterPreview,
+    ExitPreview,
+    UpdatePreviewProgress {
+        progress: f64,
+    },
 }
