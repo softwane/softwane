@@ -105,8 +105,35 @@ macro_rules! define_channels {
     };
 }
 
+pub(super) use define_channels;
+
 impl_channel_value_binop!(Add, add, +);
 impl_channel_value_binop!(Sub, sub, -);
 impl_channel_value_binop!(Mul, mul, *);
 
-pub(super) use define_channels;
+pub type ChannelConfigArray = [ChannelConfig; SENSORY_CHANNEL_COUNT];
+pub type SensoryChannelArray = [SensoryChannel; SENSORY_CHANNEL_COUNT];
+pub type LogicFrame = [Update<ChannelValue>; SENSORY_CHANNEL_COUNT];
+pub type ChannelSwitchStates = [bool; SENSORY_CHANNEL_COUNT];
+
+/// Standalone helper macro — no longer nested inside `define_channels!`.
+macro_rules! impl_channel_array_type_index {
+    ($array_type:ty, $output_type:ty) => {
+        impl std::ops::Index<ChannelType> for $array_type {
+            type Output = $output_type;
+            fn index(&self, index: ChannelType) -> &Self::Output {
+                &self[index as usize]
+            }
+        }
+        impl std::ops::IndexMut<ChannelType> for $array_type {
+            fn index_mut(&mut self, index: ChannelType) -> &mut Self::Output {
+                &mut self[index as usize]
+            }
+        }
+    };
+}
+
+impl_channel_array_type_index!(ChannelConfigArray, ChannelConfig);
+impl_channel_array_type_index!(SensoryChannelArray, SensoryChannel);
+impl_channel_array_type_index!(LogicFrame, Update<ChannelValue>);
+impl_channel_array_type_index!(ChannelSwitchStates, bool);

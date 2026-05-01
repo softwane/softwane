@@ -1,14 +1,14 @@
 mod definition;
 mod state_params;
-mod channel;
+mod channel_implementation;
 mod system;
 mod curves;
 
 pub use state_params::*;
-pub use channel::*;
+pub use channel_implementation::*;
 pub use system::*;
 pub use curves::*;
-use definition::*;
+pub use definition::*;
 
 use serde::{Deserialize, Serialize};
 
