@@ -8,7 +8,7 @@ pub use state_params::*;
 pub use channel::*;
 pub use system::*;
 pub use curves::*;
-pub use definition::*;
+use definition::*;
 
 use serde::{Deserialize, Serialize};
 

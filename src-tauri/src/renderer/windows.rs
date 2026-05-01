@@ -106,8 +106,8 @@ impl WindowsColorTransformer {
     ) {
         self.update_color_transformation_matrix(saturation, color_temperature, brightness);
         match self.cached_color_transform_matrix {
-            Update::Changed(color_transform_matrix) => {
-                self.apply_color_transformation_matrix(color_transform_matrix, app, sender);
+            Update::Changed(_) => {
+                self.apply_color_transformation_matrix(app, sender);
             }
             Update::Unchanged(_) => {
                 let _ = Renderer::send_event(
@@ -151,7 +151,7 @@ impl WindowsColorTransformer {
             ChannelValue::ColorTempKelvin(t) => *t,
             _ => unreachable!(),
         };
-        let b = match brightness.get_value() {
+        let br = match brightness.get_value() {
             ChannelValue::Brightness(b) => *b,
             _ => unreachable!(),
         };
@@ -162,13 +162,13 @@ impl WindowsColorTransformer {
         // the D65 (6500 K) white point.  Multiplying each coefficient by the
         // brightness scalar ensures brightness only affects the R/G/B diagonal
         // entries; m44 (alpha) and m55 (homogeneous coordinate) remain 1.0.
-        let (r, g, b_kelvin) = kelvin_to_rgb(c_kelvin);
+        let (r, g, b) = kelvin_to_rgb(c_kelvin);
         let rgb_brightness_matrix = ColorTransformMatrix::new(
-            r * b,      0.0,        0.0,          0.0, 0.0,
-            0.0,        g * b,      0.0,          0.0, 0.0,
-            0.0,        0.0,        b_kelvin * b, 0.0, 0.0,
-            0.0,        0.0,        0.0,          1.0, 0.0,
-            0.0,        0.0,        0.0,          0.0, 1.0,
+            r * br, 0.0,    0.0,    0.0,    0.0,
+            0.0,    g * br, 0.0,    0.0,    0.0,
+            0.0,    0.0,    b * br, 0.0,    0.0,
+            0.0,    0.0,    0.0,    1.0,    0.0,
+            0.0,    0.0,    0.0,    0.0,    1.0,
         );
 
         // Apply saturation first (may reduce to grayscale), then re-colour with
@@ -183,7 +183,6 @@ impl WindowsColorTransformer {
     /// `sender`.
     fn apply_color_transformation_matrix(
         &mut self,
-        color_transform_matrix: ColorTransformMatrix,
         app: &AppHandle,
         sender: Sender<RendererEvent>,
     ) {
@@ -193,9 +192,9 @@ impl WindowsColorTransformer {
         // If a future optimisation is needed: compare `matrix_f32` with the last
         // f32 matrix actually written and send `RenderUnappliedDueToUnchanged`
         // when they are element-wise equal.
-        let matrix_f32 = Self::to_row_major_f32(&color_transform_matrix);
+        let matrix_f32 = Self::to_row_major_f32(self.cached_color_transform_matrix.get_value());
 
-        let name        = self.name;
+        let name = self.name;
         let initialized = Arc::clone(&self.magnification_initialized);
         let sender_for_closure = sender.clone();
 

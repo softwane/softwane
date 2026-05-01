@@ -52,9 +52,7 @@ trait RendererEventSending {
 // TODO: add explanation for the matrix
 type ColorTransformMatrix = Matrix5<f64>;
 
-type R = f64;
-type G = f64;
-type B = f64;
+type RGB = (f64, f64, f64);
 
 /// Tanner Helland algorithm: approximated blackbody RGB for a given temperature.
 /// Returns channel values on a 0.0–1.0 scale.
@@ -65,14 +63,14 @@ type B = f64;
 /// Valid range: 1000 K – 40000 K. See https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html
 // TODO: update the fitting model, referring to "/refs/Black body temperature.nb".
 // It's from https://github.com/rgatkinson/ParticleDmxNeopixel
-fn kelvin_to_rgb(kelvin: u32) -> (R, G, B) {
+fn kelvin_to_rgb(kelvin: u32) -> RGB {
     let t = kelvin.clamp(1000, 40000);
     const T_D65: u32 = match ChannelType::ColorTemp.neutral_value() {
         ChannelValue::ColorTempKelvin(k) => k,
         _ => unreachable!(),
     };
 
-    fn r_function(t: u32) -> R {
+    fn r_function(t: u32) -> f64 {
         if t <= 6600 {
             255.0
         } else {
@@ -80,9 +78,9 @@ fn kelvin_to_rgb(kelvin: u32) -> (R, G, B) {
         }
     }
     let r = r_function(t);
-    let r_d65: R = r_function(T_D65);
+    let r_d65: f64 = r_function(T_D65);
 
-    fn g_function(t: u32) -> G {
+    fn g_function(t: u32) -> f64 {
         if t <= 6600 {
             (99.4708025861 * ((t/100) as f64).ln() - 161.1195681661).clamp(0.0, 255.0)
         } else {
@@ -90,9 +88,9 @@ fn kelvin_to_rgb(kelvin: u32) -> (R, G, B) {
         }
     }
     let g = g_function(t);
-    let g_d65: G = g_function(T_D65);
+    let g_d65: f64 = g_function(T_D65);
 
-    fn b_function(t: u32) -> B {
+    fn b_function(t: u32) -> f64 {
         if t >= 6600 {
             255.0
         } else if t <= 1900 {
@@ -102,7 +100,7 @@ fn kelvin_to_rgb(kelvin: u32) -> (R, G, B) {
         }
     }
     let b = b_function(t);
-    let b_d65: B = b_function(T_D65);
+    let b_d65: f64 = b_function(T_D65);
 
     (
         (r / r_d65).clamp(0.0, 1.0),

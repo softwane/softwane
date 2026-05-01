@@ -81,7 +81,7 @@ impl TimerStateMachine {
         self.state = new_state;
     }
 
-    fn apply(&mut self, command: &StateCommand, config: &AppConfig, just_transited_flag: &mut bool) {
+    fn apply(&mut self, command: &StateCommand, config: &AppConfig, just_transited: &mut bool) {
         match command {
             StateCommand::StartSession { target_duration_ms } => {
                 match self.state {
@@ -90,7 +90,7 @@ impl TimerStateMachine {
                             elapsed_ms: 0,
                             target_duration_ms: *target_duration_ms,
                         });
-                        *just_transited_flag = true;
+                        *just_transited = true;
                     }
                     TimerState::Preview { .. } => {
                         eprintln!(
@@ -112,7 +112,7 @@ impl TimerStateMachine {
                             elapsed_ms: 0,
                             target_duration_ms: config.settling_duration_ms,
                         });
-                        *just_transited_flag = true;
+                        *just_transited = true;
                     }
                     _ => {
                         eprintln!(
@@ -131,7 +131,7 @@ impl TimerStateMachine {
                             elapsed_ms: 0,
                             target_duration_ms: config.reverse_duration_ms,
                         });
-                        *just_transited_flag = true;
+                        *just_transited = true;
                     }
                     _ => {
                         eprintln!(
@@ -145,7 +145,7 @@ impl TimerStateMachine {
                 match self.state {
                     TimerState::Idle => {
                         self.transit(TimerState::Preview { progress: 0.0 });
-                        *just_transited_flag = true;
+                        *just_transited = true;
                     }
                     _ => {
                         eprintln!(
@@ -159,7 +159,7 @@ impl TimerStateMachine {
                 match self.state {
                     TimerState::Preview { .. } => {
                         self.transit(TimerState::Idle);
-                        *just_transited_flag = true;
+                        *just_transited = true;
                     }
                     _ => {
                         eprintln!(
@@ -194,12 +194,11 @@ impl TimerStateMachine {
 
     pub fn handle_commands(
         &mut self,
-        commands: &mut Vec<StateCommand>,
-        config: &AppConfig,
-        just_transited_flag: &mut bool,
+        frame_events: &mut FrameEvents,
+        config: &AppConfig, // TODO: Maybe eliminate it in B5
     ) {
-        for command in commands.drain(..) {
-            self.apply(&command, config, just_transited_flag);
+        for command in frame_events.state_commands.drain(..) {
+            self.apply(&command, config, &mut frame_events.just_transited);
         }
     }
 
@@ -286,7 +285,7 @@ mod tests {
         fe: &mut FrameEvents,
         cfg: &AppConfig,
     ) {
-        t.handle_commands(&mut fe.state_commands, cfg, &mut fe.just_transited);
+        t.handle_commands(fe, cfg);
     }
 
     #[test]

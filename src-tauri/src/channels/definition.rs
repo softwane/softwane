@@ -93,15 +93,9 @@ macro_rules! define_channels {
                 ChannelConfig {
                     switch_on: $switch_on,
                     persistent_state_params_table: PersistentStateParamsTable {
-                        progress_curve_parameters: CurveParameters::NormalizedSigmoid {
-                            steepness: DEFAULT_SIGMOID_STEEPNESS,
-                        },
-                        settling_curve_parameters: CurveParameters::NormalizedSigmoid {
-                            steepness: DEFAULT_SIGMOID_STEEPNESS,
-                        },
-                        reverse_curve_parameters: CurveParameters::NormalizedSigmoid {
-                            steepness: DEFAULT_SIGMOID_STEEPNESS,
-                        },
+                        progress_curve_parameters: DEFAULT_NORMALIZED_SIGMOID_PARAMETERS,
+                        settling_curve_parameters: DEFAULT_NORMALIZED_SIGMOID_PARAMETERS,
+                        reverse_curve_parameters: DEFAULT_NORMALIZED_SIGMOID_PARAMETERS,
                         progress_begin_ratio: DEFAULT_PROGRESS_BEGIN_RATIO,
                         target_channel_value: ChannelValue::$val_var($default_target),
                     },

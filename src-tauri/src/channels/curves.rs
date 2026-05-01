@@ -6,7 +6,8 @@ pub enum CurveParameters {
     NormalizedSigmoid { steepness: f64 },
 }
 
-pub(super) const DEFAULT_SIGMOID_STEEPNESS: f64 = 10.0;
+pub const DEFAULT_NORMALIZED_SIGMOID_PARAMETERS: CurveParameters 
+    = CurveParameters::NormalizedSigmoid { steepness: 10.0 };
 
 fn sigmoid(x: f64, steepness: f64) -> f64 {
     1.0 / (1.0 + f64::exp(-steepness * (x - 0.5)))
