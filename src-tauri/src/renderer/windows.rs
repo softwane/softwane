@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::utils::*;
+use crate::{channels::ChannelSwitchStates, utils::*};
 use super::*;
 
 
@@ -34,7 +34,7 @@ impl RendererEventSending for Renderer {
 impl Rendering for Renderer {
     fn render(&mut self, logic_frame: Arc<LogicFrame>, app: &AppHandle) {
         let saturation       = logic_frame[ChannelType::Saturation];
-        let color_temperature = logic_frame[ChannelType::ColorTemperature];
+        let color_temperature = logic_frame[ChannelType::ColorTemp];
         let brightness       = logic_frame[ChannelType::Brightness];
         self.color_transformer.transform_color(
             saturation,
@@ -148,7 +148,7 @@ impl WindowsColorTransformer {
             _ => unreachable!(),
         };
         let c_kelvin = match color_temperature.get_value() {
-            ChannelValue::ColorKelvin(t) => *t,
+            ChannelValue::ColorTempKelvin(t) => *t,
             _ => unreachable!(),
         };
         let b = match brightness.get_value() {
@@ -370,7 +370,7 @@ mod tests {
         // Stamp in a non-trivial Changed matrix.
         t.update_color_transformation_matrix(
             Update::Changed(ChannelValue::Saturation(0.5)),
-            Update::Changed(ChannelValue::ColorKelvin(3000)),
+            Update::Changed(ChannelValue::ColorTempKelvin(3000)),
             Update::Changed(ChannelValue::Brightness(0.8)),
         );
         let cached_before = *t.cached_color_transform_matrix.get_value();
@@ -378,7 +378,7 @@ mod tests {
         // All Unchanged: must re-tag Unchanged without recomputing.
         t.update_color_transformation_matrix(
             Update::Unchanged(ChannelValue::Saturation(0.5)),
-            Update::Unchanged(ChannelValue::ColorKelvin(3000)),
+            Update::Unchanged(ChannelValue::ColorTempKelvin(3000)),
             Update::Unchanged(ChannelValue::Brightness(0.8)),
         );
 
@@ -392,7 +392,7 @@ mod tests {
         let mut t = WindowsColorTransformer::default();
         t.update_color_transformation_matrix(
             Update::Changed(ChannelType::Saturation.neutral_value()),
-            Update::Changed(ChannelType::ColorTemperature.neutral_value()),
+            Update::Changed(ChannelType::ColorTemp.neutral_value()),
             Update::Changed(ChannelType::Brightness.neutral_value()),
         );
         let m = *t.cached_color_transform_matrix.get_value();

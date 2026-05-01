@@ -652,9 +652,9 @@ impl<R: Runtime> Engine<R> {
 
 #### B0 · 让代码恢复编译 + 引入依赖
 
-- [ ] 删除 `compositor.rs`、`compositors.rs`（不存在但有引用）、`platform.rs`、`phase.rs`、`session.rs`、`old_commands.rs`
-- [ ] `lib.rs` 删 `mod compositor; mod compositors; mod platform; mod phase; mod session;` 与对应 manage/handler
-- [ ] 退化 `pub fn run()`：
+- [x] 删除 `compositor.rs`、`compositors.rs`（不存在但有引用）、`platform.rs`、`phase.rs`、`session.rs`、`old_commands.rs`
+- [x] `lib.rs` 删 `mod compositor; mod compositors; mod platform; mod phase; mod session;` 与对应 manage/handler
+- [x] 退化 `pub fn run()`：
   ```rust
   pub fn run() {
       tauri::Builder::default()
@@ -663,48 +663,47 @@ impl<R: Runtime> Engine<R> {
           .expect("...");
   }
   ```
-- [ ] `Cargo.toml` 添加：
+- [x] `Cargo.toml` 添加：
   ```toml
   tauri-plugin-store = "2"
   tauri-plugin-global-shortcut = "2"
   tauri-plugin-autostart = "2"
   tokio = { version = "1", features = ["sync", "time", "rt-multi-thread"] }
   ```
-- [ ] `cargo check` 通过
+- [x] `cargo check` 通过
 
 **里程碑 M1**：能编译，`tauri dev` 能启动空 app + tray
 
 #### B1 · 事件骨架与 Engine 空跑
 
-- [ ] `events/timer_state_commands.rs` 加 `EnterPreview/ExitPreview/UpdatePreviewProgress/ForceResetRenderer`
-- [ ] `events/mod.rs` 新增 `EngineEvent` 枚举
-- [ ] `engine.rs` 拆为 `engine/mod.rs` + `engine/frame_events.rs`
-- [ ] `FrameFlags` 升级为 `FrameEvents`
-- [ ] `engine/handle.rs` 定义 `EngineHandle { tx, join }` + `Drop` 防御日志
-- [ ] `lib.rs::setup` 中：构造 `mpsc::channel(256)` → spawn engine thread → `app.manage(EngineHandle)`
-- [ ] Engine `run` 仅有空循环 + collect_events + Shutdown 退出
+- [x] `events/timer_state_commands.rs` 加 `EnterPreview/ExitPreview/UpdatePreviewProgress/ForceResetRenderer`
+- [x] `events/mod.rs` 新增 `EngineEvent` 枚举
+- [x] `engine.rs` 拆为 `engine/mod.rs` + `engine/frame_events.rs`
+- [x] `FrameFlags` 升级为 `FrameEvents`
+- [x] `engine/handle.rs` 定义 `EngineHandle { tx, join }` + `Drop` 防御日志
+- [x] `lib.rs::setup` 中：构造 `mpsc::channel(256)` → spawn engine thread → `app.manage(EngineHandle)`
+- [x] Engine `run` 仅有空循环 + collect_events + Shutdown 退出
 
 **里程碑 M2**：engine thread 空跑，关闭信号能让它退出
 
 #### B2 · TimerStateMachine 升级
 
-- [ ] 删除 `cerrent_elapsed_ms` 字段及 getter
-- [ ] 新增 `TimerState::Preview { progress: f64 }`
-- [ ] 新增 `recommended_tick_interval()`
-- [ ] `handle_command`：Preview 命令分支、StartSession 在 Preview 下忽略 + warn
-- [ ] `update`：Preview 分支 no-op + 注释
-- [ ] `_ => {}` 加 warn log
-- [ ] 单元测试
+- [x] 删除 `cerrent_elapsed_ms` 字段及 getter
+- [x] 新增 `TimerState::Preview { progress: f64 }`
+- [x] 新增 `recommended_tick_interval()`
+- [x] `handle_command`：Preview 命令分支、StartSession 在 Preview 下忽略 + warn
+- [x] `update`：Preview 分支 no-op + 注释
+- [x] `_ => {}` 加 warn log
+- [x] 单元测试
 
 #### B3 · Channels 跨平台统一 + Preview 分支
 
-- [ ] 合并 `define_channels!`（去掉 cfg 分裂）
-- [ ] `ChannelType::is_available_on_this_platform()`
-- [ ] `SensoryChannel::handle_command` 返回 `bool`（dirty）
-- [ ] 把 `calculate_this_value` 重构为接受 `progress: f64` 的纯函数
-- [ ] `tick` 加 Preview 分支
-- [ ] `ChannelFuncParamsMatrix::Index<TimerState>` 把 Preview 映射到 PROGRESS 槽
-- [ ] 通道关闭硬切到 neutral —— 留 TODO 注释（v1 改为 fade-out）
+- [x] 合并 `define_channels!`（去掉 cfg 分裂）
+- [x] `ChannelType::is_available_on_this_platform()`
+- [x] 把 `calculate_this_value` 重构为接受 `progress: f64` 的纯函数
+- [x] `tick` 加 Preview 分支
+- [x] `ChannelFuncParamsMatrix::Index<TimerState>` 把 Preview 映射到 PROGRESS 槽
+- [x] 通道关闭硬切到 neutral —— 留 TODO 注释（v1 改为 fade-out）
 
 #### B4 · Renderer 完善
 
@@ -847,7 +846,7 @@ Preview添加快捷键，此外也添加拉起前端窗口和关闭前端窗口�
 ```rust
 // channels.rs
 pub struct SensoryChannelsSystem {
-    channels: SensoryChannels,   // [SensoryChannel; SENSORY_CHANNELS_COUNT]
+    channels: SensoryChannels,   // [SensoryChannel; SENSORY_CHANNEL_COUNT]
 }
 
 impl SensoryChannelsSystem {

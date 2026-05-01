@@ -67,8 +67,8 @@ type B = f64;
 // It's from https://github.com/rgatkinson/ParticleDmxNeopixel
 fn kelvin_to_rgb(kelvin: u32) -> (R, G, B) {
     let t = kelvin.clamp(1000, 40000);
-    const T_D65: u32 = match ChannelType::ColorTemperature.neutral_value() {
-        ChannelValue::ColorKelvin(k) => k,
+    const T_D65: u32 = match ChannelType::ColorTemp.neutral_value() {
+        ChannelValue::ColorTempKelvin(k) => k,
         _ => unreachable!(),
     };
 

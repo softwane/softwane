@@ -1,6 +1,5 @@
 use crate::channels::{ChannelType, ChannelValue, CurveParameters};
 
-
 pub enum ChannelCommand {
     ToggleSwitch {
         channel_type: ChannelType,
@@ -11,7 +10,7 @@ pub enum ChannelCommand {
     },
     UpdateProgressBeginRatio {
         channel_type: ChannelType,
-        progress_begin_ratio: f64,  // This one should be clamped to 0.0 ~ 1.0
+        progress_begin_ratio: f64,
     },
     UpdateProgressCurveParas {
         channel_type: ChannelType,
@@ -25,4 +24,19 @@ pub enum ChannelCommand {
         channel_type: ChannelType,
         curve_parameters: CurveParameters,
     },
+}
+
+impl ChannelCommand {
+    pub fn channel_type(&self) -> ChannelType {
+        match self {
+            Self::ToggleSwitch { channel_type, .. }
+            | Self::UpdateProgressBeginRatio { channel_type, .. }
+            | Self::UpdateProgressCurveParas { channel_type, .. }
+            | Self::UpdateSettlingCurveParas { channel_type, .. }
+            | Self::UpdateReverseCurveParas { channel_type, .. } => *channel_type,
+            Self::UpdateTargetChannelValue { target_channel_value } => {
+                ChannelType::from(*target_channel_value)
+            }
+        }
+    }
 }

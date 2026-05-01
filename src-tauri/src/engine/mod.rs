@@ -19,11 +19,6 @@ use crate::events::EngineEvent;
 
 const TARGET_FRAME_INTERVAL: Duration = Duration::from_micros(16_667);
 
-pub struct EngineHandle {
-    pub tx: Sender<EngineEvent>,
-    pub join: Mutex<Option<JoinHandle<()>>>,
-}
-
 pub struct Engine {
     event_rx: Receiver<EngineEvent>,
 
@@ -90,4 +85,9 @@ impl Engine {
     fn app(&self) -> &AppHandle {
         &self.app
     }
+}
+
+pub struct EngineHandle {
+    pub tx: Sender<EngineEvent>,
+    pub join: Mutex<Option<JoinHandle<()>>>,
 }
