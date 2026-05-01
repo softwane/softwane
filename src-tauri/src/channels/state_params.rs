@@ -102,5 +102,3 @@ impl std::ops::IndexMut<TimerState> for StateParamsTable {
         }
     }
 }
-
-pub(super) const DEFAULT_PROGRESS_BEGIN_RATIO: f64 = 0.9;

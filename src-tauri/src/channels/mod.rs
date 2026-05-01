@@ -22,11 +22,7 @@ define_channels!(
     Brightness(default_on=false, persist_key="brightness")
         => Brightness(f64, neutral=1.0, default_target=0.6);
 );
-
-
-// ---------------------------------------------------------------------------
-// ChannelType helpers
-// ---------------------------------------------------------------------------
+const DEFAULT_PROGRESS_BEGIN_RATIO: f64 = 0.9;
 
 impl ChannelType {
     /// Returns whether this channel is supported on the current platform.
@@ -46,10 +42,6 @@ impl ChannelType {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
