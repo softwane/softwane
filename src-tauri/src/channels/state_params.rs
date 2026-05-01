@@ -22,7 +22,7 @@ pub struct StateParams {
     pub target_value: ChannelValue,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct StateParamsTable([StateParams; 3]);
 

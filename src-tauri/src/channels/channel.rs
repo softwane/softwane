@@ -15,7 +15,7 @@ pub struct ChannelConfig {
     pub persistent_state_params_table: PersistentStateParamsTable,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SensoryChannel {
     channel_type: ChannelType,
