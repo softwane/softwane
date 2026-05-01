@@ -16,11 +16,11 @@ use crate::utils::Update;
 
 define_channels!(
     Saturation(default_on=true,  persist_key="saturation")
-        => Saturation(f64, neutral=1.0f64, default_target=0.2f64);
+        => Saturation(f64, neutral=1.0, default_target=0.2);
     ColorTemp(default_on=true,   persist_key="color_temp")
-        => ColorTempKelvin(u32, neutral=6500u32, default_target=2500u32);
+        => ColorTempKelvin(u32, neutral=6500, default_target=2500);
     Brightness(default_on=false, persist_key="brightness")
-        => Brightness(f64, neutral=1.0f64, default_target=0.6f64);
+        => Brightness(f64, neutral=1.0, default_target=0.6);
 );
 
 
