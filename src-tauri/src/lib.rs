@@ -5,7 +5,7 @@ mod configs;
 mod engine;
 mod events;
 mod observability;
-mod renderer;
+mod renderers;
 mod timer_state_machine;
 mod tray;
 mod utils;
@@ -15,7 +15,12 @@ pub fn run() {
         .manage(observability::ManagedObservability::default())
         .setup(|app| {
             let (event_tx, event_rx) = tokio::sync::mpsc::channel(256);
-            let engine = engine::Engine::new(app.handle().clone(), event_rx);
+            
+            let engine = engine::Engine::new(
+                app.handle().clone(), 
+                event_rx,
+                (&event_tx).clone(),
+            );
             let engine_join = std::thread::spawn(move || engine.run());
 
             app.manage(engine::EngineHandle {

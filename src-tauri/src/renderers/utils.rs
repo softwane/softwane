@@ -1,58 +1,12 @@
-use std::sync::{
-    Arc,
-};
-
-use tauri::AppHandle;
 use nalgebra::Matrix5;
-use tokio::sync::mpsc::{Sender, error::SendError};
 
-use crate::{
-    channels::{ChannelSwitchStates, ChannelType, ChannelValue, LogicFrame},
-    events::RendererEvent,
-};
+use crate::channels::{ChannelType, ChannelValue};
 
+// TODO: add documentation explaining what color transform matrix is 
+// for this type
+pub(super) type ColorTransformMatrix = Matrix5<f64>;
 
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(target_os = "macos")]
-pub use self::macos::*;
-
-#[cfg(target_os = "windows")]
-mod windows;
-#[cfg(target_os = "windows")]
-#[allow(unused_imports)]
-pub use self::windows::*;
-
-
-pub trait Rendering {
-    fn render(
-        &mut self,
-        logic_frame: Arc<LogicFrame>,
-        app: &AppHandle,
-    );
-
-    // Used when exiting the app.
-    fn try_shutdown(&mut self, app: &AppHandle);
-
-    // Used by user to reset the renderer to the initial state.
-    fn try_reset(&mut self, app: &AppHandle);
-
-    // Used when the channel switch states change.
-    fn switch_subrenderer_states(
-        &mut self,
-        channel_switch_states: ChannelSwitchStates,
-        app: &AppHandle,
-    );
-}
-
-trait RendererEventSending {
-    fn send_event(sender: Sender<RendererEvent>, event: RendererEvent) -> Result<(), SendError<RendererEvent>>;
-}
-
-// TODO: add explanation for the matrix
-type ColorTransformMatrix = Matrix5<f64>;
-
-type RGB = (f64, f64, f64);
+pub(super) type RGB = (f64, f64, f64);
 
 /// Tanner Helland algorithm: approximated blackbody RGB for a given temperature.
 /// Returns channel values on a 0.0–1.0 scale.
@@ -63,7 +17,7 @@ type RGB = (f64, f64, f64);
 /// Valid range: 1000 K – 40000 K. See https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html
 // TODO: update the fitting model, referring to "/refs/Black body temperature.nb".
 // It's from https://github.com/rgatkinson/ParticleDmxNeopixel
-fn kelvin_to_rgb(kelvin: u32) -> RGB {
+pub(super) fn kelvin_to_rgb(kelvin: u32) -> RGB {
     let t = kelvin.clamp(1000, 40000);
     const T_D65: u32 = match ChannelType::ColorTemp.neutral_value() {
         ChannelValue::ColorTempKelvin(k) => k,
@@ -107,25 +61,4 @@ fn kelvin_to_rgb(kelvin: u32) -> RGB {
         (g / g_d65).clamp(0.0, 1.0),
         (b / b_d65).clamp(0.0, 1.0),
     )
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    
-    #[test]
-    fn test_kelvin_to_rgb() {
-        let (r, g, b) = kelvin_to_rgb(6500);
-        let r_abs_diff = (r - 1.0).abs();
-        let g_abs_diff = (g - 1.0).abs();
-        let b_abs_diff = (b - 1.0).abs();
-        assert!(r_abs_diff < 0.001);
-        assert!(g_abs_diff < 0.001);
-        assert!(b_abs_diff < 0.001);
-        let (_, _, b) = kelvin_to_rgb(1900);
-        let b_abs_diff = (b - 0.0).abs();
-        assert!(b_abs_diff < 0.001);
-    }
 }

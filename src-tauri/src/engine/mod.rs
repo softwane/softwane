@@ -15,23 +15,30 @@ use std::{
 use tauri::AppHandle;
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::events::EngineEvent;
+use crate::events::{EngineEvent, RendererEvent};
+use crate::renderers::RendererDispatcher;
 
 const TARGET_FRAME_INTERVAL: Duration = Duration::from_micros(16_667);
 
 pub struct Engine {
+    app: AppHandle,
     event_rx: Receiver<EngineEvent>,
 
-    app: AppHandle,
+    renderers: RendererDispatcher,
 
     last_frame_at: Instant,
 }
 
 impl Engine {
-    pub fn new(app: AppHandle, event_rx: Receiver<EngineEvent>) -> Self {
+    pub fn new(
+        app: AppHandle,
+        event_rx: Receiver<EngineEvent>,
+        event_tx: Sender<EngineEvent>,
+    ) -> Self {
         Self {
             app,
             event_rx,
+            renderers: RendererDispatcher::new((&event_tx).clone()),
             last_frame_at: Instant::now(),
         }
     }
@@ -85,9 +92,4 @@ impl Engine {
     fn app(&self) -> &AppHandle {
         &self.app
     }
-}
-
-pub struct EngineHandle {
-    pub tx: Sender<EngineEvent>,
-    pub join: Mutex<Option<JoinHandle<()>>>,
 }

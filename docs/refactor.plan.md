@@ -707,15 +707,332 @@ impl<R: Runtime> Engine<R> {
 
 #### B4 · Renderer 完善
 
-###### B4.1 Windows
-- [ ] `Sender<RendererEvent>` → `Sender<EngineEvent>`
-- [ ] `try_shutdown` 实现：oneshot + run_on_main_thread + 3s 超时 + 恢复 identity + uninit
-- [ ] `try_reset`：dispatch identity + 重置 cached_color_transform_matrix
-- [ ] `switch_subrenderer_states`：当前单子渲染器，no-op + 注释
+##### B4.0 Dispatcher
+- [x] 重写对外暴露接口，Windows和MacOS各自对应一个dispatcher，保持相同的公共方法，内部将各个任务派发到各个子渲染器:
+    ```rust
+        #[cfg(target_os = "windows")]
+        mod dispatcher {
+            pub type RendererDispatcher = WindowsRendererDispatcher;
+
+            struct WindowsRendererDispatcher {
+                tx: Sender<EngineEvent>,
+                app: &AppHandle,
+                color_transformer: WinMagAPIColorTransformer,
+                // future renderer
+            }
+
+            impl WindowsRendererDispatcher {
+                pub fn new(tx: Sender<EngineEvent>, app: &AppHandle) {
+                    Self {
+                        tx,
+                        app,
+                        color_transformer: WinMagAPIColorTransformer::default(),
+                    }
+                }
+
+                pub fn dispatch(
+                    &mut self,
+                    logic_frame: Arc<LogicFrame>,
+                ) {
+                    // get s, ct, b
+                    self.color_transformer.render(
+                        s,
+                        ct,
+                        b,
+                        self.app,
+                        self.tx.clone(),
+                    );
+                }
+
+                pub fn switch_renderer(
+                    &mut self,
+                    channel_switch_states: ChannelSwitchStates,
+                ) {
+                    // get render's corresponding channels' switch state
+                    // e.g. swtich_s, switch_ct, switch_b
+                    if !(switch_s && switch_ct && switch_b) {
+                        self.color_transformer.shutdown(
+                            self.app,
+                            self.tx.clone(),
+                        );
+                    } else {
+                        self.color_transformer.startup(
+                            self.app,
+                            self.tx.clone(),
+                        );
+                    }
+                }
+
+                pub fn shutdown(&mut self) {
+                    self.switch_renderer(ChannelSwitchStates::OFF);
+                }
+
+                pub fn reset(
+                    &mut self,
+                    channel_switch_states: ChannelSwitchStates,
+                ) {
+                    self.shutdown();
+                    self.switch_renderer(channel_switch_states);
+                }
+            }
+        }
+        
+        #[cfg(target_os = "macos")]
+        mod dispatcher {
+            pub type RendererDispatcher = MacOSRendererDispatcher;
+
+            // Same public method with different owned renderer
+        }
+    ```
+- [x] 每个Renderer独自一个文件，都要实现pub(super) render(), shutdown(), 和startup()；render参考目前的WindowsColorTransformer.transform_color，shutdown和startup根据当前switch状态决定是否切换状态和清理API。
+
+##### B4.1 Windows
+- [x] `Sender<RendererEvent>` → `Sender<EngineEvent>`
+- [x] `try_shutdown` 实现：oneshot + run_on_main_thread + 3s 超时 + 恢复 identity + uninit
+- [x] `try_reset`：dispatch identity + 重置 cached_color_transform_matrix
+- [x] `switch_subrenderer_states`：当前单子渲染器，no-op + 注释
 - [ ] 健康监测（outstanding_dispatches）—— 推迟到 B8
 
-###### B4.2 macOS（独立 PR）
-- [ ] 从旧 `platform.rs::mod macos` 迁移 FFI
+##### B4.2 macOS（独立 PR）
+- [ ] 从旧 `platform.rs::mod macos` 迁移 FFI:
+    ```rust
+    #[cfg(target_os = "macos")]
+    mod macos {
+        use std::sync::Mutex;
+
+        use super::PlatformAdapter;
+        use crate::compositor::CompositeFrame;
+
+        type CGDirectDisplayID = u32;
+        type CGDisplayCount = u32;
+        type CGTableCount = u32;
+        type CGGammaValue = f32;
+        type CGError = i32;
+
+        const CG_ERROR_SUCCESS: CGError = 0;
+        const MAX_ACTIVE_DISPLAYS: usize = 32;
+        const GAMMA_TABLE_CAPACITY: usize = 256;
+        const NEUTRAL_WARMTH_KELVIN: f32 = 6500.0;
+        const MIN_WARMTH_KELVIN: f32 = 2000.0;
+
+        #[link(name = "ApplicationServices", kind = "framework")]
+        unsafe extern "C" {
+            fn CGGetActiveDisplayList(
+                max_displays: CGDisplayCount,
+                active_displays: *mut CGDirectDisplayID,
+                display_count: *mut CGDisplayCount,
+            ) -> CGError;
+            fn CGGetDisplayTransferByTable(
+                display: CGDirectDisplayID,
+                capacity: CGTableCount,
+                red_table: *mut CGGammaValue,
+                green_table: *mut CGGammaValue,
+                blue_table: *mut CGGammaValue,
+                sample_count: *mut CGTableCount,
+            ) -> CGError;
+            fn CGSetDisplayTransferByTable(
+                display: CGDirectDisplayID,
+                table_size: CGTableCount,
+                red_table: *const CGGammaValue,
+                green_table: *const CGGammaValue,
+                blue_table: *const CGGammaValue,
+            ) -> CGError;
+            fn CGDisplayRestoreColorSyncSettings();
+        }
+
+        #[derive(Clone)]
+        struct DisplayGammaTable {
+            display_id: CGDirectDisplayID,
+            red: Vec<CGGammaValue>,
+            green: Vec<CGGammaValue>,
+            blue: Vec<CGGammaValue>,
+        }
+
+        #[derive(Default)]
+        struct MacDisplayState {
+            baseline_tables: Option<Vec<DisplayGammaTable>>,
+        }
+
+        #[derive(Default)]
+        pub struct MacPlatformAdapter {
+            state: Mutex<MacDisplayState>,
+        }
+
+        impl PlatformAdapter for MacPlatformAdapter {
+            fn backend_name(&self) -> &'static str {
+                "macos-core-graphics"
+            }
+
+            fn try_apply(&self, frame: &CompositeFrame) -> Result<bool, String> {
+                self.apply_frame(frame)
+                    .map_err(|error| error.to_string())
+            }
+        }
+
+        impl Drop for MacPlatformAdapter {
+            fn drop(&mut self) {
+                unsafe {
+                    CGDisplayRestoreColorSyncSettings();
+                }
+            }
+        }
+
+        impl MacPlatformAdapter {
+            fn apply_frame(&self, frame: &CompositeFrame) -> Result<bool, MacDisplayError> {
+                let mut state = self
+                    .state
+                    .lock()
+                    .map_err(|_| MacDisplayError::StatePoisoned)?;
+
+                if state.baseline_tables.is_none() {
+                    state.baseline_tables = Some(capture_display_baselines()?);
+                }
+
+                let baseline_tables = state
+                    .baseline_tables
+                    .as_ref()
+                    .ok_or(MacDisplayError::MissingBaselines)?;
+
+                if frame.is_neutral() {
+                    unsafe {
+                        CGDisplayRestoreColorSyncSettings();
+                    }
+                    return Ok(true);
+                }
+
+                let warmth = normalize_warmth(frame.warmth_kelvin);
+                let chroma = frame.saturation.clamp(0.0, 1.0);
+                let brightness_base = frame.brightness.clamp(0.0, 1.0);
+                let brightness = (brightness_base * (1.0 - warmth * 0.055)).clamp(0.5, 1.0);
+                let red_scale = (brightness * (1.0 + warmth * 0.15)).clamp(0.0, 1.25);
+                let green_scale = (brightness * (1.0 + warmth * 0.02)).clamp(0.0, 1.15);
+                let blue_scale = (brightness * (1.0 - warmth * 0.20)).clamp(0.0, 1.0);
+                let gamma = (1.0 + (1.0 - chroma) * 0.35).clamp(1.0, 2.2);
+
+                for table in baseline_tables {
+                    let red = transform_channel(&table.red, red_scale, gamma);
+                    let green = transform_channel(&table.green, green_scale, gamma);
+                    let blue = transform_channel(&table.blue, blue_scale, gamma);
+
+                    let result = unsafe {
+                        CGSetDisplayTransferByTable(
+                            table.display_id,
+                            red.len() as CGTableCount,
+                            red.as_ptr(),
+                            green.as_ptr(),
+                            blue.as_ptr(),
+                        )
+                    };
+
+                    if result != CG_ERROR_SUCCESS {
+                        return Err(MacDisplayError::CgError(result));
+                    }
+                }
+
+                Ok(true)
+            }
+        }
+
+        fn normalize_warmth(warmth_kelvin: u32) -> f32 {
+            ((NEUTRAL_WARMTH_KELVIN - warmth_kelvin as f32)
+                / (NEUTRAL_WARMTH_KELVIN - MIN_WARMTH_KELVIN))
+                .clamp(0.0, 1.0)
+        }
+
+        fn transform_channel(baseline: &[CGGammaValue], scale: f32, gamma: f32) -> Vec<CGGammaValue> {
+            baseline
+                .iter()
+                .map(|value| value.clamp(0.0, 1.0).powf(gamma) * scale)
+                .map(|value| value.clamp(0.0, 1.0))
+                .collect()
+        }
+
+        fn capture_display_baselines() -> Result<Vec<DisplayGammaTable>, MacDisplayError> {
+            let display_ids = active_display_ids()?;
+            let mut tables = Vec::with_capacity(display_ids.len());
+
+            for display_id in display_ids {
+                let mut red = vec![0.0; GAMMA_TABLE_CAPACITY];
+                let mut green = vec![0.0; GAMMA_TABLE_CAPACITY];
+                let mut blue = vec![0.0; GAMMA_TABLE_CAPACITY];
+                let mut sample_count: CGTableCount = 0;
+
+                let result = unsafe {
+                    CGGetDisplayTransferByTable(
+                        display_id,
+                        GAMMA_TABLE_CAPACITY as CGTableCount,
+                        red.as_mut_ptr(),
+                        green.as_mut_ptr(),
+                        blue.as_mut_ptr(),
+                        &mut sample_count,
+                    )
+                };
+
+                if result != CG_ERROR_SUCCESS {
+                    return Err(MacDisplayError::CgError(result));
+                }
+
+                let sample_count = sample_count as usize;
+                red.truncate(sample_count);
+                green.truncate(sample_count);
+                blue.truncate(sample_count);
+
+                if sample_count == 0 {
+                    return Err(MacDisplayError::EmptyTransferTable(display_id));
+                }
+
+                tables.push(DisplayGammaTable {
+                    display_id,
+                    red,
+                    green,
+                    blue,
+                });
+            }
+
+            Ok(tables)
+        }
+
+        fn active_display_ids() -> Result<Vec<CGDirectDisplayID>, MacDisplayError> {
+            let mut display_ids = vec![0; MAX_ACTIVE_DISPLAYS];
+            let mut display_count: CGDisplayCount = 0;
+            let result = unsafe {
+                CGGetActiveDisplayList(
+                    MAX_ACTIVE_DISPLAYS as CGDisplayCount,
+                    display_ids.as_mut_ptr(),
+                    &mut display_count,
+                )
+            };
+
+            if result != CG_ERROR_SUCCESS {
+                return Err(MacDisplayError::CgError(result));
+            }
+
+            display_ids.truncate(display_count as usize);
+
+            if display_ids.is_empty() {
+                return Err(MacDisplayError::NoDisplays);
+            }
+
+            Ok(display_ids)
+        }
+
+        #[derive(Debug, thiserror::Error)]
+        enum MacDisplayError {
+            #[error("core graphics error {0}")]
+            CgError(CGError),
+            #[error("display state lock was poisoned")]
+            StatePoisoned,
+            #[error("failed to capture baseline tables")]
+            MissingBaselines,
+            #[error("no active displays were found")]
+            NoDisplays,
+            #[error("display {0} returned an empty transfer table")]
+            EmptyTransferTable(CGDirectDisplayID),
+        }
+
+        pub use MacPlatformAdapter as PublicMacPlatformAdapter;
+    }
+    ```
 - [ ] 实现 Rendering trait
 - [ ] 渲染时忽略 Saturation 通道
 
@@ -748,19 +1065,19 @@ impl<R: Runtime> Engine<R> {
 
 #### B7 · Tauri 挂载
 
-###### B7.1 Commands
+##### B7.1 Commands
 - [ ] 重写 `commands.rs`（不是 old_commands.rs）：所有命令薄转发到 EngineHandle.tx
 - [ ] `register_progress_channel` / `clear_progress_channel`
 - [ ] `get_available_channels` 返回平台可用通道列表
 - [ ] `lib.rs::invoke_handler` 注册新命令
 
-###### B7.2 Tray
+##### B7.2 Tray
 - [ ] `setup_tray` 接收 `Sender<EngineEvent>`，菜单回调改为直接发 EngineEvent
 - [ ] `update_tray_title` 显示倒计时
 - [ ] `update_tray_menu` 根据 phase 启用/禁用菜单项
 - [ ] tray icon 显示进度（圆形进度条图标）—— v1 简化为文字 title，圆形 icon 留 TODO
 
-###### B7.3 全局快捷键
+##### B7.3 全局快捷键
 - [ ] `tauri-plugin-global-shortcut` 集成
 - [ ] 注册 N 个快捷键（N 由 store 配置驱动）：
   - 三个 StartSession 快捷键（不同时长）
@@ -769,11 +1086,11 @@ impl<R: Runtime> Engine<R> {
   - 一个 ForceResetRenderer
 - [ ] 回调发对应 EngineEvent
 
-###### B7.4 自启动
+##### B7.4 自启动
 - [ ] `tauri-plugin-autostart` 集成，默认开启
 - [ ] 设置面板提供开关
 
-###### B7.5 启动隐藏
+##### B7.5 启动隐藏
 - [ ] `tauri.conf.json`：`"visible": false`
 - [ ] tray click / 命令唤起时 `window.show()`
 
