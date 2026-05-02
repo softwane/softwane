@@ -26,16 +26,6 @@ pub struct StateParams {
 #[serde(rename_all = "snake_case")]
 pub struct StateParamsTable([StateParams; 3]);
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct PersistentStateParamsTable {
-    pub progress_curve_parameters: CurveParameters,
-    pub settling_curve_parameters: CurveParameters,
-    pub reverse_curve_parameters: CurveParameters,
-    pub progress_begin_ratio: f64,
-    pub target_channel_value: ChannelValue,
-}
-
 impl StateParamsTable {
     pub fn new(persistent: &PersistentStateParamsTable) -> Self {
         let channel_type: ChannelType = persistent.target_channel_value.into();
@@ -99,6 +89,38 @@ impl std::ops::IndexMut<TimerState> for StateParamsTable {
                 "Invalid timer state for StateParamsTable: {:?}",
                 index.label()
             ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PersistentStateParamsTable {
+    pub progress_curve_parameters: CurveParameters,
+    pub settling_curve_parameters: CurveParameters,
+    pub reverse_curve_parameters: CurveParameters,
+    pub progress_begin_ratio: f64,
+    pub target_channel_value: ChannelValue,
+}
+
+
+pub(super) fn load_channel_config(store: &tauri_plugin_store::Store<tauri::Wry>, channel_type: ChannelType) -> ChannelConfig {
+    let key = channel_type.store_key();
+    let raw = match store.get(&key) {
+        Some(v) => v,
+        None => {
+            tracing::info!(?channel_type, "no stored config, using default");
+            return DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type];
+        }
+    };
+    match serde_json::from_value::<ChannelConfig>(raw) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            tracing::warn!(
+                ?channel_type, ?e,
+                "stored config schema mismatch, using default"
+            );
+            DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type]
         }
     }
 }

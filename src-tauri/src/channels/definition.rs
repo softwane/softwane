@@ -35,10 +35,14 @@ macro_rules! define_channels {
             /// Stable key used for persistence.  Even if the enum variant name
             /// changes in a future refactor, this value stays the same so that
             /// previously-stored config continues to deserialise correctly.
-            pub const fn persist_key(&self) -> &'static str {
+            const fn persist_key(&self) -> &'static str {
                 match self {
                     $( ChannelType::$type_var => $persist_key, )*
                 }
+            }
+
+            pub fn store_key(&self) -> String {
+                format!("channels.{}", self.persist_key())
             }
         }
 
@@ -88,7 +92,7 @@ macro_rules! define_channels {
             }
         }
 
-        pub const DEFAULT_CHANNEL_CONFIG_ARRAY: [ChannelConfig; SENSORY_CHANNEL_COUNT] = [
+        pub const DEFAULT_CHANNEL_CONFIG_ARRAY: ChannelConfigArray = [
             $(
                 ChannelConfig {
                     switch_on: $switch_on,

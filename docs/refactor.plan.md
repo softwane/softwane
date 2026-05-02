@@ -1038,8 +1038,8 @@ impl<R: Runtime> Engine<R> {
 
 #### B5 · Persistence (走 Store 插件)
 
-- [ ] `Cargo.toml` 已加 `tauri-plugin-store`
-- [ ] `lib.rs::setup` 中：
+- [x] `Cargo.toml` 已加 `tauri-plugin-store`
+- [x] `lib.rs::setup` 中：
   ```rust
   let store = StoreBuilder::new(app, "config.json")
       .auto_save(Duration::from_secs(2))
@@ -1049,10 +1049,10 @@ impl<R: Runtime> Engine<R> {
       .default("shortcuts.session_durations", vec![25*60_000u64, 50*60_000, 90*60_000])
       .build()?;
   ```
-- [ ] 重写 `configs.rs::AppConfig`：从 store 读取构造，不持有 store
-- [ ] Engine 持有 `Arc<Store<R>>`
-- [ ] 命令处理时调 `store.set("channels.saturation", value)` 等
-- [ ] Shutdown 路径调 `store.save()` 同步阻塞
+- [x] 重写 `configs.rs::AppConfig`：从 store 读取构造，不持有 store
+- [x] Engine 持有 `Arc<Store<R>>`
+- [x] 命令处理时调 `store.set("channels.saturation", value)` 等
+- [x] Shutdown 路径调 `store.save()` 同步阻塞
 
 #### B6 · Shutdown 路径
 

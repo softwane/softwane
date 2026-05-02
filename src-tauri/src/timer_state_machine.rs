@@ -1,27 +1,22 @@
-use crate::configs::AppConfig;
+use serde::{Deserialize, Serialize};
+
+use tauri::Wry;
+use tauri_plugin_store::Store;
+
 use crate::events::StateCommand;
 use crate::engine::FrameEvents;
+
+// ── TimerState ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TimerState {
     Idle,
     /// Frontend-driven preview: `progress` is in 0.0–1.0, controlled by the config slider.
-    Preview {
-        progress: f64,
-    },
-    Progress {
-        elapsed_ms: u64,
-        target_duration_ms: u64,
-    },
-    Settling {
-        elapsed_ms: u64,
-        target_duration_ms: u64,
-    },
+    Preview { progress: f64 },
+    Progress { elapsed_ms: u64, target_duration_ms: u64 },
+    Settling { elapsed_ms: u64, target_duration_ms: u64 },
     Sabi,
-    Reverse {
-        elapsed_ms: u64,
-        target_duration_ms: u64,
-    },
+    Reverse { elapsed_ms: u64, target_duration_ms: u64 },
 }
 
 impl TimerState {
@@ -62,15 +57,70 @@ pub const SETTLING_STATE: TimerState = TimerState::Settling { elapsed_ms: 0, tar
 pub const SABI_STATE: TimerState = TimerState::Sabi;
 pub const REVERSE_STATE: TimerState = TimerState::Reverse { elapsed_ms: 0, target_duration_ms: 0 };
 
+// ── Constants ────────────────────────────────────────────────────────
+
+pub const DEFAULT_SETTLING_DURATION_MS: u64 = 5_000;
+pub const DEFAULT_REVERSE_DURATION_MS: u64 = 2_000;
+
+// ── Persistent config ────────────────────────────────────────────────
+
+pub const STORE_KEY_TIMER: &str = "timer";
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default, rename_all = "snake_case")]
+pub struct PersistentTimerConfig {
+    pub settling_duration_ms: u64,
+    pub reverse_duration_ms: u64,
+}
+
+impl Default for PersistentTimerConfig {
+    fn default() -> Self {
+        Self {
+            settling_duration_ms: DEFAULT_SETTLING_DURATION_MS,
+            reverse_duration_ms: DEFAULT_REVERSE_DURATION_MS,
+        }
+    }
+}
+
+pub fn store_defaults() -> Vec<(String, serde_json::Value)> {
+    vec![(
+        STORE_KEY_TIMER.into(),
+        serde_json::to_value(PersistentTimerConfig::default())
+            .expect("PersistentTimerConfig serialization is infallible"),
+    )]
+}
+
+// ── TimerStateMachine ────────────────────────────────────────────────
+
 pub struct TimerStateMachine {
     state: TimerState,
+    settling_duration_ms: u64,
+    reverse_duration_ms: u64,
 }
 
 impl TimerStateMachine {
-    pub fn new() -> Self {
+    pub fn new(config: PersistentTimerConfig) -> Self {
         Self {
             state: TimerState::Idle,
+            settling_duration_ms: config.settling_duration_ms,
+            reverse_duration_ms: config.reverse_duration_ms,
         }
+    }
+
+    pub fn load_from_store(store: &Store<Wry>) -> Self {
+        let config = store
+            .get(STORE_KEY_TIMER)
+            .and_then(|v| serde_json::from_value::<PersistentTimerConfig>(v).ok())
+            .unwrap();
+        Self::new(config)
+    }
+
+    pub fn persist(&self, store: &Store<Wry>) {
+        let config = PersistentTimerConfig {
+            settling_duration_ms: self.settling_duration_ms,
+            reverse_duration_ms: self.reverse_duration_ms,
+        };
+        store.set(STORE_KEY_TIMER, serde_json::to_value(config).unwrap());
     }
 
     pub fn reset(&mut self) {
@@ -81,7 +131,7 @@ impl TimerStateMachine {
         self.state = new_state;
     }
 
-    fn apply(&mut self, command: &StateCommand, config: &AppConfig, just_transited: &mut bool) {
+    fn apply(&mut self, command: &StateCommand, just_transited: &mut bool) {
         match command {
             StateCommand::StartSession { target_duration_ms } => {
                 match self.state {
@@ -110,7 +160,7 @@ impl TimerStateMachine {
                     TimerState::Progress { .. } => {
                         self.transit(TimerState::Settling {
                             elapsed_ms: 0,
-                            target_duration_ms: config.settling_duration_ms,
+                            target_duration_ms: self.settling_duration_ms,
                         });
                         *just_transited = true;
                     }
@@ -129,7 +179,7 @@ impl TimerStateMachine {
                     | TimerState::Sabi => {
                         self.transit(TimerState::Reverse {
                             elapsed_ms: 0,
-                            target_duration_ms: config.reverse_duration_ms,
+                            target_duration_ms: self.reverse_duration_ms,
                         });
                         *just_transited = true;
                     }
@@ -139,6 +189,24 @@ impl TimerStateMachine {
                             self.state.label()
                         );
                     }
+                }
+            }
+            StateCommand::UpdateSettlingDuration { duration_ms } => {
+                self.settling_duration_ms = *duration_ms;
+                if let TimerState::Settling { elapsed_ms, .. } = self.state {
+                    self.state = TimerState::Settling {
+                        elapsed_ms,
+                        target_duration_ms: *duration_ms,
+                    };
+                }
+            }
+            StateCommand::UpdateReverseDuration { duration_ms } => {
+                self.reverse_duration_ms = *duration_ms;
+                if let TimerState::Reverse { elapsed_ms, .. } = self.state {
+                    self.state = TimerState::Reverse {
+                        elapsed_ms,
+                        target_duration_ms: *duration_ms,
+                    };
                 }
             }
             StateCommand::EnterPreview => {
@@ -173,9 +241,7 @@ impl TimerStateMachine {
                 match self.state {
                     TimerState::Preview { .. } => {
                         if progress.is_nan() {
-                            self.transit(TimerState::Preview { 
-                                progress: 0.0
-                            });
+                            self.transit(TimerState::Preview { progress: 0.0 });
                         }
                         self.transit(TimerState::Preview {
                             progress: progress.clamp(0.0, 1.0),
@@ -192,13 +258,21 @@ impl TimerStateMachine {
         }
     }
 
-    pub fn handle_commands(
-        &mut self,
-        frame_events: &mut FrameEvents,
-        config: &AppConfig, // TODO: Maybe eliminate it in B5
-    ) {
+    /// Drain state commands and apply them. Sets
+    /// `frame_events.need_persist.timer_state_machine = true` when a
+    /// config-modifying command (`UpdateSettlingDuration` /
+    /// `UpdateReverseDuration`) is processed.
+    pub fn handle_commands(&mut self, frame_events: &mut FrameEvents) {
         for command in frame_events.state_commands.drain(..) {
-            self.apply(&command, config, &mut frame_events.just_transited);
+            let needs_persist = matches!(
+                command,
+                StateCommand::UpdateSettlingDuration { .. }
+                    | StateCommand::UpdateReverseDuration { .. }
+            );
+            self.apply(&command, &mut frame_events.just_transited);
+            if needs_persist {
+                frame_events.need_persist.timer_state_machine = true;
+            }
         }
     }
 
@@ -208,11 +282,8 @@ impl TimerStateMachine {
         }
         match self.state {
             TimerState::Idle | TimerState::Sabi => { /* quiescent */ }
-            TimerState::Preview { .. } => { /* driven by frontend slider, not by elapsed time */ }
-            TimerState::Progress {
-                elapsed_ms,
-                target_duration_ms,
-            } => {
+            TimerState::Preview { .. } => { /* driven by frontend slider */ }
+            TimerState::Progress { elapsed_ms, target_duration_ms } => {
                 if elapsed_ms + dt_ms >= target_duration_ms {
                     self.transit(TimerState::Sabi);
                     frame_events.just_transited = true;
@@ -223,10 +294,7 @@ impl TimerStateMachine {
                     });
                 }
             }
-            TimerState::Settling {
-                elapsed_ms,
-                target_duration_ms,
-            } => {
+            TimerState::Settling { elapsed_ms, target_duration_ms } => {
                 if elapsed_ms + dt_ms >= target_duration_ms {
                     self.transit(TimerState::Sabi);
                     frame_events.just_transited = true;
@@ -237,10 +305,7 @@ impl TimerStateMachine {
                     });
                 }
             }
-            TimerState::Reverse {
-                elapsed_ms,
-                target_duration_ms,
-            } => {
+            TimerState::Reverse { elapsed_ms, target_duration_ms } => {
                 if elapsed_ms + dt_ms >= target_duration_ms {
                     self.transit(TimerState::Idle);
                     frame_events.just_transited = true;
@@ -263,8 +328,8 @@ impl TimerStateMachine {
 mod tests {
     use super::*;
 
-    fn config() -> AppConfig {
-        AppConfig {
+    fn config() -> PersistentTimerConfig {
+        PersistentTimerConfig {
             settling_duration_ms: 5000,
             reverse_duration_ms: 3000,
         }
@@ -275,51 +340,133 @@ mod tests {
     }
 
     fn start_command(duration_ms: u64) -> StateCommand {
-        StateCommand::StartSession {
-            target_duration_ms: duration_ms,
-        }
+        StateCommand::StartSession { target_duration_ms: duration_ms }
     }
 
-    fn drain_and_handle(
-        t: &mut TimerStateMachine,
-        fe: &mut FrameEvents,
-        cfg: &AppConfig,
-    ) {
-        t.handle_commands(fe, cfg);
+    fn settling_command(duration_ms: u64) -> StateCommand {
+        StateCommand::UpdateSettlingDuration { duration_ms }
+    }
+
+    fn reverse_command(duration_ms: u64) -> StateCommand {
+        StateCommand::UpdateReverseDuration { duration_ms }
+    }
+
+    #[test]
+    fn update_settling_duration_while_settling() {
+        let mut t = TimerStateMachine::new(config());
+
+        let mut fe = empty_fe();
+        fe.state_commands.push(start_command(60_000));
+        t.handle_commands(&mut fe);
+        t.tick(0, &mut fe);
+        let mut fe = empty_fe();
+        fe.state_commands.push(StateCommand::TakeBreakNow);
+        t.handle_commands(&mut fe);
+        t.tick(0, &mut fe);
+        assert!(matches!(t.state(), TimerState::Settling { target_duration_ms: 5000, .. }));
+
+        let mut fe = empty_fe();
+        fe.state_commands.push(settling_command(2000));
+        t.handle_commands(&mut fe);
+        t.tick(0, &mut fe);
+
+        assert_eq!(t.settling_duration_ms, 2000);
+        assert!(matches!(t.state(), TimerState::Settling { target_duration_ms: 2000, .. }));
+        assert!(fe.need_persist.timer_state_machine);
+    }
+
+    #[test]
+    fn update_settling_duration_while_idle() {
+        let mut t = TimerStateMachine::new(config());
+        assert_eq!(t.settling_duration_ms, 5000);
+
+        let mut fe = empty_fe();
+        fe.state_commands.push(settling_command(8000));
+        t.handle_commands(&mut fe);
+
+        assert_eq!(t.settling_duration_ms, 8000);
+        assert_eq!(t.state(), TimerState::Idle);
+        assert!(fe.need_persist.timer_state_machine);
+    }
+
+    #[test]
+    fn update_reverse_duration_while_reversing() {
+        let mut t = TimerStateMachine::new(config());
+
+        let mut fe = empty_fe();
+        fe.state_commands.push(start_command(100));
+        t.handle_commands(&mut fe);
+        t.tick(0, &mut fe);
+        t.tick(150, &mut empty_fe());
+        assert_eq!(t.state(), TimerState::Sabi);
+        let mut fe = empty_fe();
+        fe.state_commands.push(StateCommand::StopSession);
+        t.handle_commands(&mut fe);
+        t.tick(0, &mut fe);
+        assert!(matches!(t.state(), TimerState::Reverse { target_duration_ms: 3000, .. }));
+
+        let mut fe = empty_fe();
+        fe.state_commands.push(reverse_command(5000));
+        t.handle_commands(&mut fe);
+        t.tick(0, &mut fe);
+
+        assert_eq!(t.reverse_duration_ms, 5000);
+        assert!(matches!(t.state(), TimerState::Reverse { target_duration_ms: 5000, .. }));
+        assert!(fe.need_persist.timer_state_machine);
+    }
+
+    #[test]
+    fn update_reverse_duration_while_idle() {
+        let mut t = TimerStateMachine::new(config());
+        assert_eq!(t.reverse_duration_ms, 3000);
+
+        let mut fe = empty_fe();
+        fe.state_commands.push(reverse_command(1000));
+        t.handle_commands(&mut fe);
+
+        assert_eq!(t.reverse_duration_ms, 1000);
+        assert_eq!(t.state(), TimerState::Idle);
+        assert!(fe.need_persist.timer_state_machine);
+    }
+
+    #[test]
+    fn start_session_does_not_trigger_persist() {
+        let mut t = TimerStateMachine::new(config());
+        let mut fe = empty_fe();
+        fe.state_commands.push(start_command(100));
+        t.handle_commands(&mut fe);
+        assert!(!fe.need_persist.timer_state_machine);
     }
 
     #[test]
     fn idle_rejects_non_start_commands() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
-
+        let mut t = TimerStateMachine::new(config());
         t.tick(0, &mut empty_fe());
         assert_eq!(t.state(), TimerState::Idle);
 
         // TakeBreakNow ignored at Idle
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::TakeBreakNow);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert_eq!(t.state(), TimerState::Idle);
 
         // StopSession ignored at Idle
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::StopSession);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert_eq!(t.state(), TimerState::Idle);
     }
 
     #[test]
     fn idle_to_progress_to_sabi_to_reverse_to_idle() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
+        let mut t = TimerStateMachine::new(config());
 
         // Start
         let mut fe = empty_fe();
         fe.state_commands.push(start_command(100));
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert!(matches!(t.state(), TimerState::Progress { .. }));
 
@@ -331,7 +478,7 @@ mod tests {
         // Stop → Reverse
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::StopSession);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert!(matches!(t.state(), TimerState::Reverse { .. }));
 
@@ -343,20 +490,19 @@ mod tests {
 
     #[test]
     fn progress_take_break_now_to_settling_to_sabi() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
+        let mut t = TimerStateMachine::new(config());
 
         // Start
         let mut fe = empty_fe();
         fe.state_commands.push(start_command(60_000));
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert!(matches!(t.state(), TimerState::Progress { .. }));
 
         // TakeBreakNow before natural end
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::TakeBreakNow);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert!(matches!(t.state(), TimerState::Settling { .. }));
 
@@ -368,87 +514,78 @@ mod tests {
 
     #[test]
     fn preview_enter_exit() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
+        let mut t = TimerStateMachine::new(config());
 
         // Enter preview from Idle
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::EnterPreview);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert!(matches!(t.state(), TimerState::Preview { .. }));
 
         // Update progress
         let mut fe = empty_fe();
-        fe.state_commands
-            .push(StateCommand::UpdatePreviewProgress { progress: 0.5 });
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        fe.state_commands.push(StateCommand::UpdatePreviewProgress { progress: 0.5 });
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         match t.state() {
-            TimerState::Preview { progress } => {
-                assert!((progress - 0.5).abs() < 0.001);
-            }
+            TimerState::Preview { progress } => assert!((progress - 0.5).abs() < 0.001),
             other => panic!("expected Preview, got {:?}", other),
         }
 
         // Exit preview → Idle
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::ExitPreview);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert_eq!(t.state(), TimerState::Idle);
     }
 
     #[test]
     fn preview_rejects_start_session() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
+        let mut t = TimerStateMachine::new(config());
 
         // Enter preview
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::EnterPreview);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
 
         // Try to start session → ignored
         let mut fe = empty_fe();
         fe.state_commands.push(start_command(100));
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert!(matches!(t.state(), TimerState::Preview { .. }));
     }
 
     #[test]
     fn preview_noop_on_time_advance() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
+        let mut t = TimerStateMachine::new(config());
 
         // Enter preview
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::EnterPreview);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
 
         // Time passes, preview progress unchanged
         let mut fe = empty_fe();
         t.tick(10_000, &mut fe);
         match t.state() {
-            TimerState::Preview { progress } => {
-                assert!((progress - 0.0).abs() < 0.001);
-            }
+            TimerState::Preview { progress } => assert!((progress - 0.0).abs() < 0.001),
             other => panic!("expected Preview, got {:?}", other),
         }
     }
 
     #[test]
     fn reset_from_any_state_to_idle() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
+        let mut t = TimerStateMachine::new(config());
 
         // Go to Progress
         let mut fe = empty_fe();
         fe.state_commands.push(start_command(100));
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert!(matches!(t.state(), TimerState::Progress { .. }));
 
@@ -459,13 +596,12 @@ mod tests {
 
     #[test]
     fn preview_reset_to_idle() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
+        let mut t = TimerStateMachine::new(config());
 
         // Enter preview
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::EnterPreview);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
 
         t.reset();
@@ -474,19 +610,17 @@ mod tests {
 
     #[test]
     fn update_preview_progress_clamped() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
+        let mut t = TimerStateMachine::new(config());
 
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::EnterPreview);
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
 
         // Out of range values are clamped
         let mut fe = empty_fe();
-        fe.state_commands
-            .push(StateCommand::UpdatePreviewProgress { progress: 1.5 });
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        fe.state_commands.push(StateCommand::UpdatePreviewProgress { progress: 1.5 });
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         match t.state() {
             TimerState::Preview { progress } => assert!((progress - 1.0).abs() < 0.001),
@@ -494,9 +628,8 @@ mod tests {
         }
 
         let mut fe = empty_fe();
-        fe.state_commands
-            .push(StateCommand::UpdatePreviewProgress { progress: -0.3 });
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        fe.state_commands.push(StateCommand::UpdatePreviewProgress { progress: -0.3 });
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         match t.state() {
             TimerState::Preview { progress } => assert!((progress - 0.0).abs() < 0.001),
@@ -506,13 +639,12 @@ mod tests {
 
     #[test]
     fn just_transited_skips_tick() {
-        let mut t = TimerStateMachine::new();
-        let cfg = config();
+        let mut t = TimerStateMachine::new(config());
 
         // Start session
         let mut fe = empty_fe();
         fe.state_commands.push(start_command(100));
-        drain_and_handle(&mut t, &mut fe, &cfg);
+        t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         assert!(fe.just_transited);
 

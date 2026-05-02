@@ -4,6 +4,12 @@ pub enum StateCommand {
     },
     TakeBreakNow,
     StopSession,
+    UpdateSettlingDuration {
+        duration_ms: u64,
+    },
+    UpdateReverseDuration {
+        duration_ms: u64,
+    },
     EnterPreview,
     ExitPreview,
     UpdatePreviewProgress {

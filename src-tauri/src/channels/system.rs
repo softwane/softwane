@@ -1,8 +1,8 @@
-//! B3: `SensoryChannelsSystem` — the wrapper that owns the full channel array.
-//!
-//! TODO: `SensoryChannelsSystem::load(&Store)` – load persisted config on startup.
-//! TODO: `persist_channel(...)` – wire up `store.set(...)` per-channel after each
-//!       command that modifies config.  Deferred to the persistence batch.
+//! B5: `SensoryChannelsSystem` — the wrapper that owns the full channel array,
+//! now with store-backed persistence.
+
+use tauri::Wry;
+use tauri_plugin_store::Store;
 
 use crate::engine::FrameEvents;
 use crate::events::ChannelCommand;
@@ -20,17 +20,31 @@ impl SensoryChannelsSystem {
         }
     }
 
+    pub fn load_from_store(store: &Store<Wry>) -> Self {
+        let array: SensoryChannelArray = std::array::from_fn(|i| {
+            let channel_type = SENSORY_CHANNEL_TYPES[i];
+            let config = load_channel_config(store, channel_type);
+            SensoryChannel::new(config)
+        });
+        Self { array }
+    }
+
     /// Drain `frame_events.channel_commands`, route each to the correct
-    /// channel, and set `frame_events.switch_changed` whenever a
-    /// `ToggleSwitch` is processed.
-    fn handle_commands(&mut self, frame_events: &mut FrameEvents) {
+    /// channel. Sets `frame_events.switch_changed` whenever a
+    /// `ToggleSwitch` is processed, and accumulates channels that need
+    /// persistence into `frame_events.need_persist.channels_system`.
+    pub fn handle_commands(&mut self, frame_events: &mut FrameEvents) {
         for command in frame_events.channel_commands.drain(..) {
             if matches!(command, ChannelCommand::ToggleSwitch { .. }) {
                 frame_events.switch_changed = true;
             }
             let target_type = command.channel_type();
             self.array[target_type].apply(command);
-            // TODO(persistence batch): call self.persist_channel(target_type, store)
+            frame_events
+                .need_persist
+                .channels_system
+                .get_or_insert_with(Vec::new)
+                .push(target_type);
         }
     }
 
@@ -40,7 +54,7 @@ impl SensoryChannelsSystem {
             channel.tick(state, frame_events);
         }
     }
-    
+
     /// Force-reset: snap every channel's `current` to neutral.
     pub fn reset(&mut self) {
         for channel in self.array.iter_mut() {
@@ -53,9 +67,15 @@ impl SensoryChannelsSystem {
     }
 
     pub fn switch_states(&self) -> ChannelSwitchStates {
-        std::array::from_fn(|i| {
-            // Access switch_on through persist() to avoid exposing the field.
-            self.array[i].switch_on()
-        })
+        std::array::from_fn(|i| self.array[i].switch_on())
+    }
+    
+    /// Persist a single channel's config. Called by the Engine after
+    /// `handle_commands` has marked it as dirty.
+    pub fn persist_channel(&self, channel_type: ChannelType, store: &Store<Wry>) {
+        let key = channel_type.store_key();
+        let value = serde_json::to_value(self.array[channel_type].persist())
+            .expect("ChannelConfig serialization is infallible");
+        store.set(key, value);
     }
 }

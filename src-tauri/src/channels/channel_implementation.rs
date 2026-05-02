@@ -103,39 +103,6 @@ impl SensoryChannel {
         }
     }
 
-    /// Compute the channel value at a given progress (0.0–1.0).
-    /// Used directly by [`TimerState::Preview`] and indirectly by
-    /// [`calculate_at_state`] for time-driven states.
-    fn calculate_at_progress(
-        params: &StateParams,
-        progress: f64,
-    ) -> ChannelValue {
-        if progress < params.curve_begin_ratio {
-            return params.curve_begin_value;
-        }
-        if progress >= 1.0 {
-            return params.target_value;
-        }
-        let normalized = (progress - params.curve_begin_ratio)
-            / (1.0 - params.curve_begin_ratio);
-        let curve_intensity = match params.curve_parameters {
-            CurveParameters::NormalizedSigmoid { steepness } => {
-                normalized_sigmoid(normalized, steepness)
-            }
-        };
-        // begin * (1 - intensity) + target * intensity
-        params.curve_begin_value * (1.0 - curve_intensity)
-            + params.target_value * curve_intensity
-    }
-
-    fn calculate_at_state(&self, state: TimerState) -> ChannelValue {
-        let params = &self.state_params_table[state];
-        let elapsed_ms = state.elapsed_ms();
-        let target_duration_ms = state.target_duration_ms();
-        let progress = elapsed_ms as f64 / target_duration_ms as f64;
-        Self::calculate_at_progress(params, progress)
-    }
-
     pub fn tick(&mut self, state: TimerState, frame_events: &FrameEvents) {
         let this_value: ChannelValue = if !self.switch_on {
             self.channel_type.neutral_value()
@@ -169,6 +136,40 @@ impl SensoryChannel {
             self.current = Update::Changed(this_value);
         }
     }
+    
+    /// Compute the channel value at a given progress (0.0–1.0).
+    /// Used directly by [`TimerState::Preview`] and indirectly by
+    /// [`calculate_at_state`] for time-driven states.
+    fn calculate_at_progress(
+        params: &StateParams,
+        progress: f64,
+    ) -> ChannelValue {
+        if progress < params.curve_begin_ratio {
+            return params.curve_begin_value;
+        }
+        if progress >= 1.0 {
+            return params.target_value;
+        }
+        let normalized = (progress - params.curve_begin_ratio)
+            / (1.0 - params.curve_begin_ratio);
+        let curve_intensity = match params.curve_parameters {
+            CurveParameters::NormalizedSigmoid { steepness } => {
+                normalized_sigmoid(normalized, steepness)
+            }
+        };
+        // begin * (1 - intensity) + target * intensity
+        params.curve_begin_value * (1.0 - curve_intensity)
+            + params.target_value * curve_intensity
+    }
+
+    fn calculate_at_state(&self, state: TimerState) -> ChannelValue {
+        let params = &self.state_params_table[state];
+        let elapsed_ms = state.elapsed_ms();
+        let target_duration_ms = state.target_duration_ms();
+        let progress = elapsed_ms as f64 / target_duration_ms as f64;
+        Self::calculate_at_progress(params, progress)
+    }
+
 
     pub fn channel_type(&self) -> ChannelType {
         self.channel_type
