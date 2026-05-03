@@ -1056,12 +1056,12 @@ impl<R: Runtime> Engine<R> {
 
 #### B6 · Shutdown 路径
 
-- [ ] `lib.rs` 改用 `Builder::build()` + `app.run(|app, event| ...)` 模式
-- [ ] `static CLEANUP_DONE: AtomicBool`
-- [ ] `RunEvent::ExitRequested` 处理：`prevent_exit` + spawn cleanup_thread
-- [ ] cleanup_thread 内：`tx.send(Shutdown)` + `engine.join()` + 翻 atomic + `app.exit()`
-- [ ] Engine `do_shutdown` 实现
-- [ ] panic hook：写入 `store.set("system.last_crash", ...)` + `store.save()`
+- [x] `lib.rs` 改用 `Builder::build()` + `app.run(|app, event| ...)` 模式
+- [x] `static CLEANUP_DONE: AtomicBool`
+- [x] `RunEvent::ExitRequested` 处理：`prevent_exit` + spawn cleanup_thread
+- [x] cleanup_thread 内：`tx.send(Shutdown)` + `engine.join()` + 翻 atomic + `app.exit()`
+- [x] Engine `do_shutdown` 实现
+- [x] panic hook：写入 `store.set("system.last_crash", ...)` + `store.save()`
 
 #### B7 · Tauri 挂载
 

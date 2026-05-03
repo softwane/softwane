@@ -53,6 +53,7 @@ pub fn run() {
                 );
                 let _ = store_for_hook.save();
 
+                // TODO: confer "8. Panic 提示策略：tray 双信号" in refactor.plan.md
                 if let Some(tray) = app_for_hook.tray_by_id("main") {
                     let _ = tray.set_title(Some("Err"));
                 }
