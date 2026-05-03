@@ -1,6 +1,7 @@
 mod state;
-pub use state::*;
 mod config;
+
+pub use state::*;
 pub use config::*;
 
 use tauri::Wry;

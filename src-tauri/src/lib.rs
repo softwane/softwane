@@ -1,21 +1,21 @@
+mod events;
+mod engine;
+mod timer_state_machine;
+mod channels;
+mod renderers;
+mod utils;
+mod observability;
+mod tray;
+
+use engine::EngineHandle;
+use events::EngineEvent;
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use tauri::{AppHandle, Manager, RunEvent};
 use tauri_plugin_store::StoreBuilder;
-
-use crate::engine::EngineHandle;
-use crate::events::EngineEvent;
-
-mod channels;
-mod engine;
-mod events;
-mod observability;
-mod renderers;
-mod timer_state_machine;
-mod tray;
-mod utils;
 
 static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 
