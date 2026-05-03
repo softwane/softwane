@@ -1,96 +1,13 @@
-use serde::{Deserialize, Serialize};
+mod state;
+pub use state::*;
+mod config;
+pub use config::*;
 
 use tauri::Wry;
 use tauri_plugin_store::Store;
 
 use crate::events::StateCommand;
 use crate::engine::FrameEvents;
-
-// ── TimerState ───────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum TimerState {
-    Idle,
-    /// Frontend-driven preview: `progress` is in 0.0–1.0, controlled by the config slider.
-    Preview { progress: f64 },
-    Progress { elapsed_ms: u64, target_duration_ms: u64 },
-    Settling { elapsed_ms: u64, target_duration_ms: u64 },
-    Sabi,
-    Reverse { elapsed_ms: u64, target_duration_ms: u64 },
-}
-
-impl TimerState {
-    pub fn elapsed_ms(&self) -> u64 {
-        match self {
-            Self::Progress { elapsed_ms, .. }
-            | Self::Settling { elapsed_ms, .. }
-            | Self::Reverse { elapsed_ms, .. } => *elapsed_ms,
-            Self::Idle | Self::Sabi | Self::Preview { .. } => 0,
-        }
-    }
-
-    pub fn target_duration_ms(&self) -> u64 {
-        match self {
-            Self::Progress { target_duration_ms, .. }
-            | Self::Settling { target_duration_ms, .. }
-            | Self::Reverse { target_duration_ms, .. } => *target_duration_ms,
-            Self::Idle | Self::Sabi | Self::Preview { .. } => u64::MAX,
-        }
-    }
-
-    pub const fn label(&self) -> &'static str {
-        match self {
-            Self::Idle => "Idle",
-            Self::Preview { .. } => "Preview",
-            Self::Progress { .. } => "Progress",
-            Self::Settling { .. } => "Settling",
-            Self::Sabi => "Sabi",
-            Self::Reverse { .. } => "Reverse",
-        }
-    }
-}
-
-pub const IDLE_STATE: TimerState = TimerState::Idle;
-pub const PREVIEW_STATE: TimerState = TimerState::Preview { progress: 0.0 };
-pub const PROGRESS_STATE: TimerState = TimerState::Progress { elapsed_ms: 0, target_duration_ms: 0 };
-pub const SETTLING_STATE: TimerState = TimerState::Settling { elapsed_ms: 0, target_duration_ms: 0 };
-pub const SABI_STATE: TimerState = TimerState::Sabi;
-pub const REVERSE_STATE: TimerState = TimerState::Reverse { elapsed_ms: 0, target_duration_ms: 0 };
-
-// ── Constants ────────────────────────────────────────────────────────
-
-pub const DEFAULT_SETTLING_DURATION_MS: u64 = 5_000;
-pub const DEFAULT_REVERSE_DURATION_MS: u64 = 2_000;
-
-// ── Persistent config ────────────────────────────────────────────────
-
-pub const STORE_KEY_TIMER: &str = "timer";
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(default, rename_all = "snake_case")]
-pub struct PersistentTimerConfig {
-    pub settling_duration_ms: u64,
-    pub reverse_duration_ms: u64,
-}
-
-impl Default for PersistentTimerConfig {
-    fn default() -> Self {
-        Self {
-            settling_duration_ms: DEFAULT_SETTLING_DURATION_MS,
-            reverse_duration_ms: DEFAULT_REVERSE_DURATION_MS,
-        }
-    }
-}
-
-pub fn store_defaults() -> Vec<(String, serde_json::Value)> {
-    vec![(
-        STORE_KEY_TIMER.into(),
-        serde_json::to_value(PersistentTimerConfig::default())
-            .expect("PersistentTimerConfig serialization is infallible"),
-    )]
-}
-
-// ── TimerStateMachine ────────────────────────────────────────────────
 
 pub struct TimerStateMachine {
     state: TimerState,
@@ -99,7 +16,7 @@ pub struct TimerStateMachine {
 }
 
 impl TimerStateMachine {
-    pub fn new(config: PersistentTimerConfig) -> Self {
+    pub fn new(config: TimerConfig) -> Self {
         Self {
             state: TimerState::Idle,
             settling_duration_ms: config.settling_duration_ms,
@@ -110,13 +27,13 @@ impl TimerStateMachine {
     pub fn load_from_store(store: &Store<Wry>) -> Self {
         let config = store
             .get(STORE_KEY_TIMER)
-            .and_then(|v| serde_json::from_value::<PersistentTimerConfig>(v).ok())
+            .and_then(|v| serde_json::from_value::<TimerConfig>(v).ok())
             .unwrap_or_default();
         Self::new(config)
     }
 
     pub fn persist(&self, store: &Store<Wry>) {
-        let config = PersistentTimerConfig {
+        let config = TimerConfig {
             settling_duration_ms: self.settling_duration_ms,
             reverse_duration_ms: self.reverse_duration_ms,
         };
@@ -328,8 +245,8 @@ impl TimerStateMachine {
 mod tests {
     use super::*;
 
-    fn config() -> PersistentTimerConfig {
-        PersistentTimerConfig {
+    fn config() -> TimerConfig {
+        TimerConfig {
             settling_duration_ms: 5000,
             reverse_duration_ms: 3000,
         }
