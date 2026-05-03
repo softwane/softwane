@@ -11,6 +11,7 @@ use std::{
     sync::{Arc, Mutex},
     thread::JoinHandle,
     time::{Duration, Instant},
+    io::Write,
 };
 
 use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
@@ -138,7 +139,7 @@ impl Engine {
                 EngineEvent::Channel(command) => frame_events.channel_commands.push(command),
                 EngineEvent::Renderer(_event) => {
                     // Renderer events are informational during normal operation;
-                    // they are drained and counted during shutdown (see do_shutdown).
+                    // they are drained and counted during shutdown (see shutdown).
                 }
                 EngineEvent::Progress(_command) => {
                     // Progress channel ownership is added when frontend commands are wired.
@@ -211,9 +212,13 @@ impl Drop for Engine {
             return;
         }
 
-        // Abnormal path: engine was dropped without do_shutdown (panic unwinding).
+        // Abnormal path: engine was dropped without shutdown (panic unwinding).
         // catch_unwind wraps all cleanup to prevent double-panic → abort.
-        let _ = catch_unwind(AssertUnwindSafe(|| {
+        if let Err(err) = catch_unwind(AssertUnwindSafe(|| {
+            // Avoid potential new panic info overlaying the old one.
+            // See the hook in lib.rs
+            let _prev = std::panic::take_hook();
+
             self.renderers.shutdown(&self.app);
             let deadline = Instant::now() + SHUTDOWN_TIMEOUT;
             let mut acked = false;
@@ -241,10 +246,22 @@ impl Drop for Engine {
                 );
             }
             let _ = self.store.save();
-            let _ = std::io::Write::write_fmt(
-                &mut std::io::stderr(),
+            // tracing may not work in such cases
+            let _ = std::io::stderr().write_fmt(
                 format_args!("[Engine::drop] panic recovery cleanup done\n"),
             );
-        }));
+        })) {
+            tracing::error!(
+                "[Engine::drop] panic recovery shutting down fails: {:#?}",
+                err
+            );
+            // tracing may not work in such cases
+            let _ = std::io::stderr().write_fmt(
+            format_args!(
+                    "[Engine::drop] panic recovery shutting down fails: {:#?}\n",
+                    err
+                )
+            );
+        };
     }
 }

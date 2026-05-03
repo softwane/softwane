@@ -38,11 +38,10 @@ pub fn run() {
             // Panic hook
             let store_for_hook = store.clone();
             let app_for_hook = app.handle().clone();
-            let _prev = std::panic::take_hook();
             std::panic::set_hook(Box::new(move |info| {
                 let msg = format!("{info}");
                 let _ = store_for_hook.set(
-                    "system.last_crash".to_string(),
+                    "program_last_crash".to_string(),
                     serde_json::json!({
                         "message": msg,
                         "thread": std::thread::current()
