@@ -7,6 +7,7 @@ mod frame_events;
 pub use frame_events::FrameEvents;
 
 use std::{
+    panic::{catch_unwind, AssertUnwindSafe},
     sync::{Arc, Mutex},
     thread::JoinHandle,
     time::{Duration, Instant},
@@ -24,6 +25,16 @@ use crate::renderers::RendererDispatcher;
 
 const TARGET_FRAME_INTERVAL: Duration = Duration::from_micros(16_667);
 
+// ── Shutdown ──────────────────────────────────────────────────────────
+
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
+const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+pub struct EngineHandle {
+    pub tx: Sender<EngineEvent>,
+    pub join: Mutex<Option<JoinHandle<()>>>,
+}
+
 pub struct Engine {
     timer: TimerStateMachine,
     channels: SensoryChannelsSystem,
@@ -34,6 +45,7 @@ pub struct Engine {
     event_rx: Receiver<EngineEvent>,
 
     last_frame_at: Instant,
+    cleaned_up: bool,
 }
 
 impl Engine {
@@ -47,13 +59,14 @@ impl Engine {
         let channels = SensoryChannelsSystem::load_from_store(&store);
         let renderers = RendererDispatcher::new(event_tx);
         Self {
-            app,
-            event_rx,
             timer,
             channels,
             renderers,
+            app,
             store,
+            event_rx,
             last_frame_at: Instant::now(),
+            cleaned_up: false,
         }
     }
 
@@ -68,6 +81,7 @@ impl Engine {
             let mut frame_events = self.collect_events();
 
             if frame_events.shutdown_requested {
+                self.shutdown();
                 break;
             }
 
@@ -83,7 +97,6 @@ impl Engine {
             self.timer.handle_commands(&mut frame_events);
             self.timer.tick(dt_ms, &mut frame_events);
 
-            
             // Channel calculation
             self.channels
                 .handle_commands(&mut frame_events);
@@ -124,7 +137,8 @@ impl Engine {
                 EngineEvent::State(command) => frame_events.state_commands.push(command),
                 EngineEvent::Channel(command) => frame_events.channel_commands.push(command),
                 EngineEvent::Renderer(_event) => {
-                    // B1 only wires the bus; renderer events will be logged/handled later.
+                    // Renderer events are informational during normal operation;
+                    // they are drained and counted during shutdown (see do_shutdown).
                 }
                 EngineEvent::Progress(_command) => {
                     // Progress channel ownership is added when frontend commands are wired.
@@ -137,7 +151,100 @@ impl Engine {
         frame_events
     }
 
+    fn shutdown(&mut self) {
+        tracing::info!("engine shutdown begin");
+
+        // 1. Dispatch shutdown closures (non-blocking).
+        self.renderers.shutdown(&self.app);
+        let store_for_closure = self.store.clone();
+        let save_handle = std::thread::spawn( move || {
+            if let Err(e) = store_for_closure.save() {
+                tracing::error!("failed to save store during shutdown: {e}");
+            }
+        });
+
+        // 2. Drain events within the timeout, waiting for ShutdownCompleted.
+        let deadline = Instant::now() + SHUTDOWN_TIMEOUT;
+        let mut acked = false;
+
+        while !acked && Instant::now() < deadline {
+            match self.event_rx.try_recv() {
+                Ok(EngineEvent::Renderer(RendererEvent::ShutdownCompleted { renderer_name })) => {
+                    tracing::info!(renderer_name, "renderer shutdown acked");
+                    acked = true;
+                }
+                Ok(EngineEvent::Renderer(other)) => {
+                    tracing::trace!(?other, "drained during shutdown");
+                }
+                Ok(_) => {
+                    // Inbound commands during shutdown are discarded.
+                }
+                Err(TryRecvError::Empty) => std::thread::sleep(SHUTDOWN_POLL_INTERVAL),
+                Err(TryRecvError::Disconnected) => break,
+            }
+        }
+
+        if !acked {
+            tracing::warn!(
+                "renderer shutdown timed out after {:?}",
+                SHUTDOWN_TIMEOUT
+            );
+        }
+
+        // 3. Wait for persisting store to disk (synchronous, blocks until write completes).
+        if let Err(e) = save_handle.join() {
+            tracing::error!("failed to save store during shutdown: {:#?}", e);
+        }
+
+        self.cleaned_up = true;
+        tracing::info!("engine shutdown complete");
+    }
+
     fn recommended_tick_interval(&self) -> Duration {
         TARGET_FRAME_INTERVAL
+    }
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        if self.cleaned_up {
+            return;
+        }
+
+        // Abnormal path: engine was dropped without do_shutdown (panic unwinding).
+        // catch_unwind wraps all cleanup to prevent double-panic → abort.
+        let _ = catch_unwind(AssertUnwindSafe(|| {
+            self.renderers.shutdown(&self.app);
+            let deadline = Instant::now() + SHUTDOWN_TIMEOUT;
+            let mut acked = false;
+            while !acked && Instant::now() < deadline {
+                match self.event_rx.try_recv() {
+                    Ok(EngineEvent::Renderer(RendererEvent::ShutdownCompleted { renderer_name })) => {
+                        tracing::info!(renderer_name, "renderer shutdown acked");
+                        acked = true;
+                    }
+                    Ok(EngineEvent::Renderer(other)) => {
+                        tracing::trace!(?other, "drained during shutdown");
+                    }
+                    Ok(_) => {
+                        // Inbound commands during shutdown are discarded.
+                    }
+                    Err(TryRecvError::Empty) => std::thread::sleep(SHUTDOWN_POLL_INTERVAL),
+                    Err(TryRecvError::Disconnected) => break,
+                }
+            }
+
+            if !acked {
+                tracing::warn!(
+                    "renderer shutdown timed out after {:?}",
+                    SHUTDOWN_TIMEOUT
+                );
+            }
+            let _ = self.store.save();
+            let _ = std::io::Write::write_fmt(
+                &mut std::io::stderr(),
+                format_args!("[Engine::drop] panic recovery cleanup done\n"),
+            );
+        }));
     }
 }
