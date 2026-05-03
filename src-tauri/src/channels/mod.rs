@@ -1,10 +1,10 @@
 mod definition;
-mod state_params;
+mod state_parameters;
 mod channel_implementation;
 mod system;
 mod curves;
 
-pub use state_params::*;
+pub use state_parameters::*;
 pub use channel_implementation::*;
 pub use system::*;
 pub use curves::*;
