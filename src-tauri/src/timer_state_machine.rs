@@ -111,7 +111,7 @@ impl TimerStateMachine {
         let config = store
             .get(STORE_KEY_TIMER)
             .and_then(|v| serde_json::from_value::<PersistentTimerConfig>(v).ok())
-            .unwrap_or(PersistentTimerConfig::default());
+            .unwrap_or_default();
         Self::new(config)
     }
 
