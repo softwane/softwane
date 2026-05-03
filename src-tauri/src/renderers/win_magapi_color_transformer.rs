@@ -140,7 +140,7 @@ impl WinMagAPIColorTransformer {
                 ));
             } else {
                 let _ = tx.try_send(EngineEvent::Renderer(
-                    RendererEvent::StartupCompleted { renderer_name: name },
+                    RendererEvent::StartupSuccessful { renderer_name: name },
                 ));
             }
         });

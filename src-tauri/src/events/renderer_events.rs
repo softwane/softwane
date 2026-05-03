@@ -15,7 +15,7 @@ pub enum RendererEvent {
         error: String,
     },
     /// `startup()` completed successfully (MagInitialize returned non-zero).
-    StartupCompleted {
+    StartupSuccessful {
         renderer_name: &'static str,
     },
     /// `startup()` failed (MagInitialize returned 0).
@@ -27,6 +27,7 @@ pub enum RendererEvent {
     /// and `uninit_api` has either called MagUninitialize or fallen back.
     /// The engine can safely proceed past the shutdown drain loop upon
     /// receiving this event.
+    /// NOTE: This event does NOT mean shutting down successfully.
     ShutdownCompleted {
         renderer_name: &'static str,
     },
