@@ -21,13 +21,11 @@ impl SensoryChannelsSystem {
         }
     }
 
-    pub fn load_from_store(store: &Store<Wry>) -> Self {
-        let sensory_channels: SensoryChannelArray = std::array::from_fn(|i| {
+    pub fn load_config_from_store(store: &Store<Wry>) -> ChannelConfigArray {
+        std::array::from_fn(|i| {
             let channel_type = SENSORY_CHANNEL_TYPES[i];
-            let config = load_channel_config(store, channel_type);
-            SensoryChannel::new(config)
-        });
-        Self { sensory_channels }
+            load_channel_config(store, channel_type)
+        })
     }
 
     /// Drain `frame_events.channel_commands`, route each to the correct

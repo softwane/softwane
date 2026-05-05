@@ -57,8 +57,8 @@ impl Engine {
         event_tx: Sender<EngineEvent>,
         store: Arc<Store<Wry>>,
     ) -> Self {
-        let timer = TimerStateMachine::load_from_store(&store);
-        let channels = SensoryChannelsSystem::load_from_store(&store);
+        let timer = TimerStateMachine::new(TimerStateMachine::load_config_from_store(&store));
+        let channels = SensoryChannelsSystem::new(SensoryChannelsSystem::load_config_from_store(&store));
         let renderers = RendererDispatcher::new(event_tx);
         Self {
             timer,

@@ -26,12 +26,11 @@ impl TimerStateMachine {
         }
     }
 
-    pub fn load_from_store(store: &Store<Wry>) -> Self {
-        let config = store
+    pub fn load_config_from_store(store: &Store<Wry>) -> TimerConfig{
+        store
             .get(STORE_KEY_TIMER)
             .and_then(|v| serde_json::from_value::<TimerConfig>(v).ok())
-            .unwrap_or_default();
-        Self::new(config)
+            .unwrap_or_default()
     }
 
     pub fn persist(&self, store: &Store<Wry>) {
