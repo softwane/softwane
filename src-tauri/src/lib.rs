@@ -48,7 +48,10 @@ pub fn run() {
                             .name()
                             .unwrap_or("unknown")
                             .to_string(),
-                        "time": SystemTime::now(),
+                        "time": std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .expect("system clock went backwards")
+                            .as_millis() as u64,
                     }),
                 );
                 let _ = store_for_hook.save();
@@ -80,10 +83,14 @@ pub fn run() {
 
     app.run(|app_handle, event| match event {
         RunEvent::ExitRequested { api, code,.. } => {
+            let Some(exit_code) = code else {
+                // Prevent exit when the last window is desdroyed
+                api.prevent_exit();
+                return;
+            };
             if !CLEANUP_DONE.load(Ordering::Acquire) {
                 api.prevent_exit();
                 let app_handle_for_thread = app_handle.clone();
-                let exit_code = code.unwrap_or(0);
                 std::thread::spawn(move || shutdown(app_handle_for_thread, exit_code));
             }
         }

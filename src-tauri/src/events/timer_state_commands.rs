@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum StateCommand {
     StartSession {
         target_duration_ms: u64,

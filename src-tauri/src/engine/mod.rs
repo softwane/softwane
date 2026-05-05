@@ -31,6 +31,7 @@ const TARGET_FRAME_INTERVAL: Duration = Duration::from_micros(16_667);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
 const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
+#[derive(Debug)]
 pub struct EngineHandle {
     pub tx: Sender<EngineEvent>,
     pub join: Mutex<Option<JoinHandle<()>>>,
@@ -263,5 +264,20 @@ impl Drop for Engine {
                 )
             );
         };
+    }
+}
+
+impl std::fmt::Debug for Engine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Engine")
+         .field("timer", &self.timer)
+         .field("channels", &self.channels)
+         .field("renderers", &self.renderers)
+         .field("app", &self.app)
+         .field("store", &self.store.entries())
+         .field("event_rx", &self.event_rx)
+         .field("last_frame_at", &self.last_frame_at)
+         .field("cleaned_up", &self.cleaned_up)
+         .finish()
     }
 }

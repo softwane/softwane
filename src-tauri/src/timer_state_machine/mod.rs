@@ -10,6 +10,7 @@ use tauri_plugin_store::Store;
 use crate::events::StateCommand;
 use crate::engine::FrameEvents;
 
+#[derive(Debug)]
 pub struct TimerStateMachine {
     state: TimerState,
     settling_duration_ms: u64,

@@ -8,6 +8,7 @@ pub use self::channel_commands::*;
 pub use self::renderer_events::*;
 pub use self::progress_commands::*;
 
+#[derive(Debug)]
 pub enum EngineEvent {
     State(StateCommand),
     Channel(ChannelCommand),

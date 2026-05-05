@@ -1,5 +1,6 @@
 use crate::channels::{ChannelType, ChannelValue, CurveParameters};
 
+#[derive(Debug)]
 pub enum ChannelCommand {
     ToggleSwitch {
         channel_type: ChannelType,

@@ -13,6 +13,7 @@ use crate::events::EngineEvent;
 
 use super::win_magapi_color_transformer::WinMagAPIColorTransformer;
 
+#[derive(Debug)]
 pub struct WindowsRendererDispatcher {
     tx: Sender<EngineEvent>,
     color_transformer: WinMagAPIColorTransformer,

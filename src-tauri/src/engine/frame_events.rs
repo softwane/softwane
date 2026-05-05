@@ -1,5 +1,6 @@
 use crate::{channels::ChannelType, events::{ChannelCommand, StateCommand}};
 
+#[derive(Debug)]
 pub struct FrameEvents {
     pub state_commands: Vec<StateCommand>,
     pub channel_commands: Vec<ChannelCommand>,
@@ -27,6 +28,7 @@ impl Default for FrameEvents {
     }
 }
 
+#[derive(Debug)]
 pub struct NeedPersist {
     pub timer_state_machine: bool,
     pub channels_system: Option<Vec<ChannelType>>,

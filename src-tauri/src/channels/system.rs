@@ -9,6 +9,7 @@ use crate::events::ChannelCommand;
 use crate::timer_state_machine::TimerState;
 use super::*;
 
+#[derive(Debug)]
 pub struct SensoryChannelsSystem {
     sensory_channels: SensoryChannelArray,
 }

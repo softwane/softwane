@@ -12,6 +12,7 @@ use tokio::sync::mpsc::Sender;
 use crate::channels::{ChannelSwitchStates, LogicFrame};
 use crate::events::{EngineEvent, RendererEvent};
 
+#[derive(Debug)]
 pub struct MacOSRendererDispatcher {
     tx: Sender<EngineEvent>,
 }
