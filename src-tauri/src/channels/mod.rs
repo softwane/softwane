@@ -62,5 +62,5 @@ pub fn store_defaults() -> Vec<(String, serde_json::Value)> {
 #[cfg(test)]
 mod tests {
     // TODO: Add tests for the channels
-    // TODO: TOO MANY clamps! We need to test the math.
+    // TOO MANY clamps! We need to test the math.
 }

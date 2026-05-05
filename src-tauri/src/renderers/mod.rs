@@ -20,6 +20,8 @@ pub type RendererDispatcher = windows::WindowsRendererDispatcher;
 #[cfg(target_os = "macos")]
 pub type RendererDispatcher = macos::MacOSRendererDispatcher;
 
+// TODO: add mock renderer dispatcher for other platforms and tests
+
 #[cfg(test)]
 mod tests {
     use super::utils::*;
