@@ -91,18 +91,44 @@ pub fn run() {
             if !CLEANUP_DONE.load(Ordering::Acquire) {
                 api.prevent_exit();
                 let app_handle_for_thread = app_handle.clone();
-                std::thread::spawn(move || shutdown(app_handle_for_thread, exit_code));
+                std::thread::spawn(move || cleanup(app_handle_for_thread, exit_code));
             }
+        }
+        RunEvent::Exit => {
+            // FIXME: Sometimes (cmd+Q, quiting from menu, and quiting from dock) tauri program exits
+            // without emitting `RunEvent::ExitRequested` and emits `RunEvent::Exit` directly on macOS.
+            // See: https://github.com/tauri-apps/tauri/issues/9198.
+            // If I want to fix it without tauri's team fix it in tauri, I have to get Engine back
+            // from its thread, because the event loop has been terminated when `Exit` is emitted.
         }
         _ => {}
     });
 
-    fn shutdown(app_handle: AppHandle, exit_code: i32) {
+    fn cleanup(app_handle: AppHandle, exit_code: i32) {
         let engine_handle = app_handle.state::<EngineHandle>();
+        // Do not need to care about the error, because it means the receiver was dropped;
+        // This due to either panic or normal shutdown.
         let _ = engine_handle.tx.blocking_send(EngineEvent::Shutdown);
-        if let Some(jh) = engine_handle.join.lock().unwrap().take() {
-            let _ = jh.join();
+        let mut locked = match engine_handle.join.lock() {
+            Ok(locked) => locked,
+            Err(err) => {
+                tracing::error!(
+                    "Panic during last cleanup: {:#?}. Exit code: {}. Give up cleaning up!",
+                    err,
+                    exit_code
+                );
+                CLEANUP_DONE.store(true, Ordering::Release);
+                return;
+            }
         };
+        let Some(jh) = locked.take() else {
+            tracing::warn!("Already been cleaning or cleaned up. Exit code: {}.", exit_code);
+            return;
+        };
+        if let Err(err) = jh.join() {
+            tracing::error!("Panic in the engine thread when joining it: {:#?}.", err);
+        };
+
         CLEANUP_DONE.store(true, Ordering::Release);
         app_handle.exit(exit_code);
     }

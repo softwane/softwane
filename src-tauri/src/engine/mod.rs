@@ -84,7 +84,7 @@ impl Engine {
 
             if frame_events.shutdown_requested {
                 self.shutdown();
-                break;
+                return;
             }
 
             // ── force_reset first (emergency brake) ────────────
