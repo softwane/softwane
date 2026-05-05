@@ -195,7 +195,7 @@ impl Engine {
 
         // 3. Wait for persisting store to disk (synchronous, blocks until write completes).
         if let Err(e) = save_handle.join() {
-            tracing::error!("failed to save store during shutdown: {:#?}", e);
+            tracing::error!("failed to save store during shutdown: {:?}", e);
         }
 
         self.cleaned_up = true;
@@ -253,13 +253,13 @@ impl Drop for Engine {
             );
         })) {
             tracing::error!(
-                "[Engine::drop] panic recovery shutting down fails: {:#?}",
+                "[Engine::drop] panic recovery shutting down fails:\n{:#?}\n",
                 err
             );
             // tracing may not work in such cases
             let _ = std::io::stderr().write_fmt(
             format_args!(
-                    "[Engine::drop] panic recovery shutting down fails: {:#?}\n",
+                    "[Engine::drop] panic recovery shutting down fails:\n{:#?}\n",
                     err
                 )
             );

@@ -113,7 +113,7 @@ pub fn run() {
             Ok(locked) => locked,
             Err(err) => {
                 tracing::error!(
-                    "Panic during last cleanup: {:#?}. Exit code: {}. Give up cleaning up!",
+                    "Panic during last cleanup:\n{:#?}\n Exit code: {}. Give up cleaning up!",
                     err,
                     exit_code
                 );
@@ -126,7 +126,7 @@ pub fn run() {
             return;
         };
         if let Err(err) = jh.join() {
-            tracing::error!("Panic in the engine thread when joining it: {:#?}.", err);
+            tracing::error!("Panic in the engine thread when joining it:\n{:#?}", err);
         };
 
         CLEANUP_DONE.store(true, Ordering::Release);
