@@ -84,7 +84,8 @@ pub fn run() {
     app.run(|app_handle, event| match event {
         RunEvent::ExitRequested { api, code,.. } => {
             let Some(exit_code) = code else {
-                // Prevent exit when the last window is desdroyed
+                // Prevent exit when all windows are desdroyed.
+                // See: https://github.com/tauri-apps/tauri/issues/13511.
                 api.prevent_exit();
                 return;
             };
