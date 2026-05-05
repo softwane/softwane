@@ -31,7 +31,7 @@ pub fn run() {
             defaults.extend(channels::store_defaults());
             defaults.extend(timer_state_machine::store_defaults());
             let store = StoreBuilder::new(app.handle(), "config.json")
-                .auto_save(Duration::from_secs(2))
+                .auto_save(Duration::from_secs(1))
                 .defaults(defaults)
                 .build()?;
 
