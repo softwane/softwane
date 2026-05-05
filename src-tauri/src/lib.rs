@@ -12,7 +12,7 @@ use events::EngineEvent;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use tauri::{AppHandle, Manager, RunEvent};
 use tauri_plugin_store::StoreBuilder;
