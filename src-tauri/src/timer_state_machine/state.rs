@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
 pub enum TimerState {
     Idle,
     /// Frontend-driven preview: `progress` is in 0.0–1.0, controlled by the config slider.

@@ -78,6 +78,25 @@ pub fn run() {
             tray::setup_tray(app.handle())?;
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![
+            events::start_session,
+            events::take_break_now,
+            events::stop_session,
+            events::enter_preview,
+            events::exit_preview,
+            events::update_preview_progress,
+            events::update_settling_duration,
+            events::update_reverse_duration,
+            events::force_reset,
+            events::toggle_channel_switch,
+            events::update_target_channel_value,
+            events::update_progress_begin_ratio,
+            events::update_progress_curve_params,
+            events::update_settling_curve_params,
+            events::update_reverse_curve_params,
+            events::register_progress_channel,
+            events::get_stored_config,
+        ])
         .build(tauri::generate_context!())
         .expect("failed to build Erode App");
 

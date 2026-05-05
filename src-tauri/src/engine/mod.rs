@@ -19,14 +19,14 @@ use tauri::AppHandle;
 use tauri::Wry;
 use tauri_plugin_store::Store;
 
-use crate::events::{EngineEvent, RendererEvent};
+use crate::events::{EngineEvent, ProgressCommand, ProgressPayload, RendererEvent};
 use crate::timer_state_machine::TimerStateMachine;
 use crate::channels::SensoryChannelsSystem;
 use crate::renderers::RendererDispatcher;
 
-const TARGET_FRAME_INTERVAL: Duration = Duration::from_micros(16_667);
+const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(100); // 10 fps 给前端
 
-// ── Shutdown ──────────────────────────────────────────────────────────
+const TARGET_FRAME_INTERVAL: Duration = Duration::from_micros(16_667);
 
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
 const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(10);
@@ -46,6 +46,9 @@ pub struct Engine {
     store: Arc<Store<Wry>>,
     event_rx: Receiver<EngineEvent>,
 
+    progress_channel: Option<tauri::ipc::Channel<ProgressPayload>>,
+    last_progress_emit: Instant,
+    
     last_frame_at: Instant,
     cleaned_up: bool,
 }
@@ -67,69 +70,79 @@ impl Engine {
             app,
             store,
             event_rx,
+            progress_channel: None,
+            last_progress_emit: Instant::now(),
             last_frame_at: Instant::now(),
             cleaned_up: false,
         }
     }
 
-    pub fn run(mut self) {
-        loop {
-            let frame_started_at = Instant::now();
-            let dt_ms = frame_started_at
-                .saturating_duration_since(self.last_frame_at)
-                .as_millis() as u64;
-            self.last_frame_at = frame_started_at;
+    pub fn run(mut self) { loop {
+        let frame_started_at = Instant::now();
+        let dt_ms = frame_started_at
+            .saturating_duration_since(self.last_frame_at)
+            .as_millis() as u64;
+        self.last_frame_at = frame_started_at;
 
-            let mut frame_events = self.collect_events();
+        let mut frame_events = self.collect_events();
 
-            if frame_events.shutdown_requested {
-                self.shutdown();
-                return;
-            }
+        if frame_events.shutdown_requested {
+            self.shutdown();
+            return;
+        }
 
-            // ── force_reset first (emergency brake) ────────────
-            if frame_events.force_reset {
-                self.timer.reset();
-                self.channels.reset();
-                self.renderers
-                    .reset(self.channels.switch_states(), &self.app);
-            }
+        // force_reset first
+        if frame_events.force_reset {
+            self.timer.reset();
+            self.channels.reset();
+            self.renderers.reset(self.channels.switch_states(), &self.app);
+        }
 
-            // State advance
-            self.timer.handle_commands(&mut frame_events);
-            self.timer.tick(dt_ms, &mut frame_events);
+        // State advance
+        self.timer.handle_commands(&mut frame_events);
+        self.timer.tick(dt_ms, &mut frame_events);
 
-            // Channel calculation
-            self.channels
-                .handle_commands(&mut frame_events);
-            self.channels
-                .tick(self.timer.state(), &mut frame_events);
-            let logic_frame = Arc::new(self.channels.logic_frame());
+        // Channel calculation
+        self.channels.handle_commands(&mut frame_events);
+        self.channels.tick(self.timer.state(), &mut frame_events);
+        let logic_frame = Arc::new(self.channels.logic_frame());
 
-            // ── Persistence ──────────────────────────────────
-            if frame_events.need_persist.timer_state_machine {
-                self.timer.persist(&self.store);
-            }
-            if let Some(ref channel_types) = frame_events.need_persist.channels_system {
-                for ct in channel_types {
-                    self.channels.persist_channel(*ct, &self.store);
-                }
-            }
-
-            // ── Render side effects ────────────────────────────
-            if frame_events.switch_changed {
-                self.renderers
-                    .switch_renderer(self.channels.switch_states(), &self.app);
-            }
-            self.renderers.dispatch(logic_frame, &self.app);
-
-            // ── Frame pacing ───────────────────────────────────
-            let elapsed = frame_started_at.elapsed();
-            if elapsed < self.recommended_tick_interval() {
-                std::thread::sleep(self.recommended_tick_interval() - elapsed);
+        // Persistence
+        if frame_events.need_persist.timer_state_machine {
+            self.timer.persist(&self.store);
+        }
+        if let Some(ref channel_types) = frame_events.need_persist.channels_system {
+            for ct in channel_types {
+                self.channels.persist_channel(*ct, &self.store);
             }
         }
-    }
+
+        // Render (side effects)
+        if frame_events.switch_changed {
+            self.renderers.switch_renderer(self.channels.switch_states(), &self.app);
+        }
+        self.renderers.dispatch(logic_frame, &self.app);
+
+        // Update progress
+        let now = Instant::now();
+        if now.duration_since(self.last_progress_emit) >= PROGRESS_EMIT_INTERVAL
+            || frame_events.just_transited
+        {
+            if let Some(ch) = &self.progress_channel {
+                if let Err(e) = ch.send(ProgressPayload { timer_state: self.timer.state() }) {
+                    tracing::info!("Frontend's progress channel lost, discard the channel: {e}.");
+                    self.progress_channel = None;
+                };
+            }
+            self.last_progress_emit = now;
+        }
+
+        // Frame pacing
+        let elapsed = frame_started_at.elapsed();
+        if elapsed < self.recommended_tick_interval() {
+            std::thread::sleep(self.recommended_tick_interval() - elapsed);
+        }
+    }}
 
     fn collect_events(&mut self) -> FrameEvents {
         let mut frame_events = FrameEvents::default();
@@ -141,10 +154,12 @@ impl Engine {
                 EngineEvent::Renderer(_event) => {
                     // Renderer events are informational during normal operation;
                     // they are drained and counted during shutdown (see shutdown).
-                }
-                EngineEvent::Progress(_command) => {
-                    // Progress channel ownership is added when frontend commands are wired.
-                }
+                },
+                EngineEvent::Progress(command) => {
+                    let ProgressCommand::RegisterChannel(channel) = command;
+                    self.progress_channel = Some(channel);
+                    self.last_progress_emit = Instant::now() - PROGRESS_EMIT_INTERVAL;
+                },
                 EngineEvent::ForceReset => frame_events.force_reset = true,
                 EngineEvent::Shutdown => frame_events.shutdown_requested = true,
             }
