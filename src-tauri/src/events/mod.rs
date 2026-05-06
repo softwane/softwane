@@ -11,7 +11,7 @@ use tokio::sync::mpsc::error::SendError;
 
 use crate::channels::{ChannelType, SENSORY_CHANNEL_TYPES, load_channel_config, ChannelConfig};
 use crate::engine::EngineHandle;
-use crate::timer_state_machine::{TimerConfig, TimerStateMachine};
+use crate::timer_state_machine::{TimerConfig, load_timer_config};
 
 pub use self::timer_state_commands::*;
 pub use self::channel_commands::*;
@@ -64,7 +64,7 @@ pub fn get_stored_config(app_handle: AppHandle) -> Result<StoredConfig, CommandE
         .filter(|c| c.is_available_on_this_platform())
         .map(|c| (c, load_channel_config(&store, c)))
         .collect();
-    let timer_config = TimerStateMachine::load_config_from_store(&store);
+    let timer_config = load_timer_config(&store);
     Ok(StoredConfig { channel_configs, timer_config })
 }
 

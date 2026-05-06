@@ -1,9 +1,6 @@
 //! B5: `SensoryChannelsSystem` — the wrapper that owns the full channel array,
 //! now with store-backed persistence.
 
-use tauri::Wry;
-use tauri_plugin_store::Store;
-
 use crate::engine::FrameEvents;
 use crate::events::ChannelCommand;
 use crate::timer_state_machine::TimerState;
@@ -11,7 +8,7 @@ use super::*;
 
 #[derive(Debug)]
 pub struct SensoryChannelsSystem {
-    sensory_channels: SensoryChannelArray,
+    pub(super) sensory_channels: SensoryChannelArray,
 }
 
 impl SensoryChannelsSystem {
@@ -19,13 +16,6 @@ impl SensoryChannelsSystem {
         Self {
             sensory_channels: std::array::from_fn(|i| SensoryChannel::new(configs[i])),
         }
-    }
-
-    pub fn load_config_from_store(store: &Store<Wry>) -> ChannelConfigArray {
-        std::array::from_fn(|i| {
-            let channel_type = SENSORY_CHANNEL_TYPES[i];
-            load_channel_config(store, channel_type)
-        })
     }
 
     /// Drain `frame_events.channel_commands`, route each to the correct
@@ -69,12 +59,5 @@ impl SensoryChannelsSystem {
         std::array::from_fn(|i| self.sensory_channels[i].switch_on())
     }
     
-    /// Persist a single channel's config. Called by the Engine after
-    /// `handle_commands` has marked it as dirty.
-    pub fn persist_channel(&self, channel_type: ChannelType, store: &Store<Wry>) {
-        let key = channel_type.store_key();
-        let value = serde_json::to_value(self.sensory_channels[channel_type].persist())
-            .expect("ChannelConfig serialization is infallible");
-        store.set(key, value);
-    }
+
 }

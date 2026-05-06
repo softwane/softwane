@@ -3,6 +3,8 @@
 //! TODO: schema version / migration code for PersistentStateParamsTable.
 
 use serde::{Deserialize, Serialize};
+use tauri::Wry;
+use tauri_plugin_store::Store;
 
 use crate::timer_state_machine::*;
 use super::*;
@@ -101,4 +103,56 @@ pub struct PersistentStateParamsTable {
     pub reverse_curve_parameters: CurveParameters,
     pub progress_begin_ratio: f64,
     pub target_channel_value: ChannelValue,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ChannelConfig {
+    pub switch_on: bool,
+    pub persistent_state_params_table: PersistentStateParamsTable,
+}
+
+pub fn load_channel_config(store: &tauri_plugin_store::Store<tauri::Wry>, channel_type: ChannelType) -> ChannelConfig {
+    let key = channel_type.store_key();
+    let Some(raw) = store.get(&key) else {
+        tracing::info!(?channel_type, "no stored config, using default");
+        return DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type];
+    };
+    serde_json::from_value::<ChannelConfig>(raw).unwrap_or_else(|e| {
+        tracing::warn!(
+            ?channel_type, ?e,
+            "stored config schema mismatch, using default"
+        );
+        DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type]
+        
+    })
+}
+
+pub fn load_channel_config_array(store: &Store<Wry>) -> ChannelConfigArray {
+    std::array::from_fn(|i| {
+        let channel_type = SENSORY_CHANNEL_TYPES[i];
+        load_channel_config(store, channel_type)
+    })
+}
+
+/// Persist a single channel's config. Called by the Engine after
+/// `handle_commands` has marked it as dirty.
+pub fn persist_channel(channels_system: &SensoryChannelsSystem, channel_type: ChannelType, store: &Store<Wry>) {
+    let key = channel_type.store_key();
+    let value = serde_json::to_value(channels_system.sensory_channels[channel_type].persist())
+        .expect("ChannelConfig serialization is infallible");
+    store.set(key, value);
+}
+
+pub fn store_defaults() -> Vec<(String, serde_json::Value)> {
+    SENSORY_CHANNEL_TYPES
+        .iter()
+        .map(|ct| {
+            (
+                ct.store_key(),
+                serde_json::to_value(DEFAULT_CHANNEL_CONFIG_ARRAY[*ct])
+                    .expect("ChannelConfig serialization is infallible"),
+            )
+        })
+        .collect()
 }

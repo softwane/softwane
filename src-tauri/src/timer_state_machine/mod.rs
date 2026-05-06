@@ -4,17 +4,14 @@ mod config;
 pub use state::*;
 pub use config::*;
 
-use tauri::Wry;
-use tauri_plugin_store::Store;
-
 use crate::events::StateCommand;
 use crate::engine::FrameEvents;
 
 #[derive(Debug)]
 pub struct TimerStateMachine {
     state: TimerState,
-    settling_duration_ms: u64,
-    reverse_duration_ms: u64,
+    pub(super) settling_duration_ms: u64,
+    pub(super) reverse_duration_ms: u64,
 }
 
 impl TimerStateMachine {
@@ -26,20 +23,7 @@ impl TimerStateMachine {
         }
     }
 
-    pub fn load_config_from_store(store: &Store<Wry>) -> TimerConfig{
-        store
-            .get(STORE_KEY_TIMER)
-            .and_then(|v| serde_json::from_value::<TimerConfig>(v).ok())
-            .unwrap_or_default()
-    }
 
-    pub fn persist(&self, store: &Store<Wry>) {
-        let config = TimerConfig {
-            settling_duration_ms: self.settling_duration_ms,
-            reverse_duration_ms: self.reverse_duration_ms,
-        };
-        store.set(STORE_KEY_TIMER, serde_json::to_value(config).unwrap());
-    }
 
     pub fn reset(&mut self) {
         self.state = TimerState::Idle;

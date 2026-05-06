@@ -1,10 +1,10 @@
 mod definition;
-mod state_parameters;
+mod config;
 mod channel_implementation;
 mod system;
 mod curves;
 
-pub use state_parameters::*;
+pub use config::*;
 pub use channel_implementation::*;
 pub use system::*;
 pub use curves::*;
@@ -22,6 +22,7 @@ define_channels!(
     Brightness(default_on=false, persist_key="brightness")
         => Brightness(f64, neutral=1.0, default_target=0.6);
 );
+const DEFAULT_PROGRESS_BEGIN_RATIO: f64 = 0.9;
 
 impl ChannelType {
     /// Returns whether this channel is supported on the current platform.
@@ -40,23 +41,6 @@ impl ChannelType {
             true
         }
     }
-}
-
-// ── Store defaults ───────────────────────────────────────────────────
-
-const DEFAULT_PROGRESS_BEGIN_RATIO: f64 = 0.9;
-
-pub fn store_defaults() -> Vec<(String, serde_json::Value)> {
-    SENSORY_CHANNEL_TYPES
-        .iter()
-        .map(|ct| {
-            (
-                ct.store_key(),
-                serde_json::to_value(DEFAULT_CHANNEL_CONFIG_ARRAY[*ct])
-                    .expect("ChannelConfig serialization is infallible"),
-            )
-        })
-        .collect()
 }
 
 #[cfg(test)]

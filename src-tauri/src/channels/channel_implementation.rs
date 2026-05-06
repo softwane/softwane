@@ -8,12 +8,7 @@ use crate::{
 };
 use super::*;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ChannelConfig {
-    pub switch_on: bool,
-    pub persistent_state_params_table: PersistentStateParamsTable,
-}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -189,20 +184,4 @@ impl SensoryChannel {
     pub(super) fn reset_current_to_neutral(&mut self) {
         self.current = Update::Changed(self.channel_type.neutral_value());
     }
-}
-
-pub fn load_channel_config(store: &tauri_plugin_store::Store<tauri::Wry>, channel_type: ChannelType) -> ChannelConfig {
-    let key = channel_type.store_key();
-    let Some(raw) = store.get(&key) else {
-        tracing::info!(?channel_type, "no stored config, using default");
-        return DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type];
-    };
-    serde_json::from_value::<ChannelConfig>(raw).unwrap_or_else(|e| {
-        tracing::warn!(
-            ?channel_type, ?e,
-            "stored config schema mismatch, using default"
-        );
-        DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type]
-        
-    })
 }

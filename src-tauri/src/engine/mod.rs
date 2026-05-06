@@ -20,8 +20,8 @@ use tauri::Wry;
 use tauri_plugin_store::Store;
 
 use crate::events::{EngineEvent, ProgressCommand, ProgressPayload, RendererEvent};
-use crate::timer_state_machine::TimerStateMachine;
-use crate::channels::SensoryChannelsSystem;
+use crate::timer_state_machine::{TimerStateMachine, load_timer_config};
+use crate::channels::{SensoryChannelsSystem, load_channel_config_array};
 use crate::renderers::RendererDispatcher;
 
 const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(100); // 10 fps 给前端
@@ -60,8 +60,8 @@ impl Engine {
         event_tx: Sender<EngineEvent>,
         store: Arc<Store<Wry>>,
     ) -> Self {
-        let timer = TimerStateMachine::new(TimerStateMachine::load_config_from_store(&store));
-        let channels = SensoryChannelsSystem::new(SensoryChannelsSystem::load_config_from_store(&store));
+        let timer = TimerStateMachine::new(load_timer_config(&store));
+        let channels = SensoryChannelsSystem::new(load_channel_config_array(&store));
         let renderers = RendererDispatcher::new(event_tx);
         Self {
             timer,
@@ -109,11 +109,11 @@ impl Engine {
 
         // Persistence
         if frame_events.need_persist.timer_state_machine {
-            self.timer.persist(&self.store);
+            crate::timer_state_machine::persist(&self.timer, &self.store);
         }
         if let Some(ref channel_types) = frame_events.need_persist.channels_system {
             for ct in channel_types {
-                self.channels.persist_channel(*ct, &self.store);
+                crate::channels::persist_channel(&self.channels, *ct, &self.store);
             }
         }
 
