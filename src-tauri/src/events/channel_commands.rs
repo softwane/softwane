@@ -48,6 +48,7 @@ impl ChannelCommand {
 
 #[tauri::command]
 pub async fn toggle_channel_switch(engine_handle: State<'_, EngineHandle>, channel_type: ChannelType, switch_on: bool) -> Result<(), CommandError> {
+    tracing::debug!("switch {channel_type:?}: {switch_on}");
     forward_engine(engine_handle.tx.clone(), EngineEvent::Channel(ChannelCommand::ToggleSwitch { channel_type, switch_on })).await
 }
 

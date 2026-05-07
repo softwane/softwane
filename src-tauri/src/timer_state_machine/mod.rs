@@ -45,12 +45,12 @@ impl TimerStateMachine {
                         *just_transited = true;
                     }
                     TimerState::Preview { .. } => {
-                        eprintln!(
+                        tracing::warn!(
                             "[TimerStateMachine] ignoring StartSession: currently in Preview; exit preview first"
                         );
                     }
                     _ => {
-                        eprintln!(
+                        tracing::warn!(
                             "[TimerStateMachine] ignoring StartSession: expected Idle, got {}",
                             self.state.label()
                         );
@@ -67,7 +67,7 @@ impl TimerStateMachine {
                         *just_transited = true;
                     }
                     _ => {
-                        eprintln!(
+                        tracing::warn!(
                             "[TimerStateMachine] ignoring TakeBreakNow: expected Progress, got {}",
                             self.state.label()
                         );
@@ -86,7 +86,7 @@ impl TimerStateMachine {
                         *just_transited = true;
                     }
                     _ => {
-                        eprintln!(
+                        tracing::warn!(
                             "[TimerStateMachine] ignoring StopSession: expected Progress/Settling/Sabi, got {}",
                             self.state.label()
                         );
@@ -118,7 +118,7 @@ impl TimerStateMachine {
                         *just_transited = true;
                     }
                     _ => {
-                        eprintln!(
+                        tracing::warn!(
                             "[TimerStateMachine] ignoring EnterPreview: expected Idle, got {}",
                             self.state.label()
                         );
@@ -132,7 +132,7 @@ impl TimerStateMachine {
                         *just_transited = true;
                     }
                     _ => {
-                        eprintln!(
+                        tracing::warn!(
                             "[TimerStateMachine] ignoring ExitPreview: expected Preview, got {}",
                             self.state.label()
                         );
@@ -150,7 +150,7 @@ impl TimerStateMachine {
                         });
                     }
                     _ => {
-                        eprintln!(
+                        tracing::warn!(
                             "[TimerStateMachine] ignoring UpdatePreviewProgress: expected Preview, got {}",
                             self.state.label()
                         );

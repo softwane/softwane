@@ -51,6 +51,7 @@ pub async fn exit_preview(engine_handle: State<'_, EngineHandle>) -> Result<(), 
 
 #[tauri::command]
 pub fn update_preview_progress(engine_handle: State<'_, EngineHandle>, progress: f64) -> Result<(), CommandError> {
+    tracing::debug!("Updating preview progress: {progress}");
     forward_engine_nowait(engine_handle.tx.clone(), EngineEvent::State(StateCommand::UpdatePreviewProgress { progress }))
 }
 

@@ -14,12 +14,15 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use tauri::{AppHandle, Manager, RunEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent};
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_store::StoreBuilder;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use crate::events::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS};
 use crate::tray::notify_crash;
+
+struct LogGuard(tracing_appender::non_blocking::WorkerGuard);
 
 static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 
@@ -32,9 +35,33 @@ pub fn run() {
             None,
         ))
         .setup(|app| {
+            // ── Tracing ──────────────────────────────────────────────
+            let log_dir = app.path().app_log_dir()
+                .or_else(|_| app.path().app_local_data_dir())?;
+            std::fs::create_dir_all(&log_dir)?;
+
+            let file_appender = tracing_appender::rolling::daily(&log_dir, "erode.log");
+            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+
+            if cfg!(debug_assertions) {
+                tracing_subscriber::registry()
+                    .with(EnvFilter::from_default_env()
+                        .add_directive("erode_app_lib=debug".parse().expect("directive")))
+                    .with(fmt::layer().with_writer(std::io::stderr))
+                    .init();
+            } else {
+                tracing_subscriber::registry()
+                    .with(EnvFilter::from_default_env()
+                        .add_directive("erode_app_lib=info".parse().expect("directive")))
+                    .with(fmt::layer().with_writer(non_blocking).json())
+                    .init();
+            }
+
+            app.manage(LogGuard(guard));
+
+            // ── Channel & store ──────────────────────────────────────
             let (event_tx, event_rx) = tokio::sync::mpsc::channel(256);
 
-            // Store preparation
             let mut defaults: HashMap<String, serde_json::Value> = HashMap::new();
             defaults.extend(channels::store_defaults());
             defaults.extend(timer_state_machine::store_defaults());
@@ -50,27 +77,29 @@ pub fn run() {
             // Autostart enabled by default
             app.autolaunch().enable().ok();
 
-            // Panic hook
+            // ── Panic hook ───────────────────────────────────────────
             let store_for_hook = store.clone();
             let app_for_hook = app.handle().clone();
             std::panic::set_hook(Box::new(move |info| {
                 let msg = format!("{info}");
+                let crash_json = serde_json::json!({
+                    "message": msg,
+                    "thread": std::thread::current()
+                        .name()
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    "time": std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("system clock went backwards")
+                        .as_millis() as u64,
+                });
                 let _ = store_for_hook.set(
                     STORE_KEY_LAST_CRASH.to_string(),
-                    serde_json::json!({
-                        "message": msg,
-                        "thread": std::thread::current()
-                            .name()
-                            .unwrap_or("unknown")
-                            .to_string(),
-                        "time": std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .expect("system clock went backwards")
-                            .as_millis() as u64,
-                    }),
+                    crash_json.clone(),
                 );
                 let _ = store_for_hook.save();
 
+                let _ = app_for_hook.emit("crash_recovered", crash_json);
                 notify_crash(&app_for_hook);
             }));
 

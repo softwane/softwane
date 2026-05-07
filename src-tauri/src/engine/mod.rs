@@ -124,6 +124,7 @@ impl Engine {
 
         // Render (side effects)
         if frame_events.switch_changed {
+            tracing::debug!("Switch states: {:?}", self.channels.switch_states());
             self.renderers.switch_renderer(self.channels.switch_states(), &self.app);
         }
         self.renderers.dispatch(logic_frame, &self.app);
