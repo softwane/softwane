@@ -2,7 +2,7 @@ use tauri::State;
 
 use crate::channels::{ChannelType, ChannelValue, CurveParameters};
 use crate::engine::EngineHandle;
-use super::{EngineEvent, CommandError, foward};
+use super::{EngineEvent, CommandError, forward_engine};
 
 #[derive(Debug)]
 pub enum ChannelCommand {
@@ -48,30 +48,30 @@ impl ChannelCommand {
 
 #[tauri::command]
 pub async fn toggle_channel_switch(engine_handle: State<'_, EngineHandle>, channel_type: ChannelType, switch_on: bool) -> Result<(), CommandError> {
-    foward(&engine_handle, EngineEvent::Channel(ChannelCommand::ToggleSwitch { channel_type, switch_on })).await
+    forward_engine(engine_handle.tx.clone(), EngineEvent::Channel(ChannelCommand::ToggleSwitch { channel_type, switch_on })).await
 }
 
 #[tauri::command]
 pub async fn update_target_channel_value(engine_handle: State<'_, EngineHandle>, target_channel_value: ChannelValue) -> Result<(), CommandError> {
-    foward(&engine_handle, EngineEvent::Channel(ChannelCommand::UpdateTargetChannelValue { target_channel_value })).await
+    forward_engine(engine_handle.tx.clone(), EngineEvent::Channel(ChannelCommand::UpdateTargetChannelValue { target_channel_value })).await
 }
 
 #[tauri::command]
 pub async fn update_progress_begin_ratio(engine_handle: State<'_, EngineHandle>, channel_type: ChannelType, progress_begin_ratio: f64) -> Result<(), CommandError> {
-    foward(&engine_handle, EngineEvent::Channel(ChannelCommand::UpdateProgressBeginRatio { channel_type, progress_begin_ratio })).await
+    forward_engine(engine_handle.tx.clone(), EngineEvent::Channel(ChannelCommand::UpdateProgressBeginRatio { channel_type, progress_begin_ratio })).await
 }
 
 #[tauri::command]
 pub async fn update_progress_curve_params(engine_handle: State<'_, EngineHandle>, channel_type: ChannelType, curve_parameters: CurveParameters) -> Result<(), CommandError> {
-    foward(&engine_handle, EngineEvent::Channel(ChannelCommand::UpdateProgressCurveParas { channel_type, curve_parameters })).await
+    forward_engine(engine_handle.tx.clone(), EngineEvent::Channel(ChannelCommand::UpdateProgressCurveParas { channel_type, curve_parameters })).await
 }
 
 #[tauri::command]
 pub async fn update_settling_curve_params(engine_handle: State<'_, EngineHandle>, channel_type: ChannelType, curve_parameters: CurveParameters) -> Result<(), CommandError> {
-    foward(&engine_handle, EngineEvent::Channel(ChannelCommand::UpdateSettlingCurveParas { channel_type, curve_parameters })).await
+    forward_engine(engine_handle.tx.clone(), EngineEvent::Channel(ChannelCommand::UpdateSettlingCurveParas { channel_type, curve_parameters })).await
 }
 
 #[tauri::command]
 pub async fn update_reverse_curve_params(engine_handle: State<'_, EngineHandle>, channel_type: ChannelType, curve_parameters: CurveParameters) -> Result<(), CommandError> {
-    foward(&engine_handle, EngineEvent::Channel(ChannelCommand::UpdateReverseCurveParas { channel_type, curve_parameters })).await
+    forward_engine(engine_handle.tx.clone(), EngineEvent::Channel(ChannelCommand::UpdateReverseCurveParas { channel_type, curve_parameters })).await
 }

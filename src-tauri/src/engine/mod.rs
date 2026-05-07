@@ -4,7 +4,9 @@
 //! (already a dependency) for frame pacing.
 
 mod frame_events;
+mod config;
 pub use frame_events::FrameEvents;
+pub use config::StoredConfig;
 
 use std::{
     panic::{catch_unwind, AssertUnwindSafe},
@@ -19,7 +21,10 @@ use tauri::AppHandle;
 use tauri::Wry;
 use tauri_plugin_store::Store;
 
-use crate::events::{EngineEvent, ProgressCommand, ProgressPayload, RendererEvent};
+use crate::{
+    events::{EngineEvent, ProgressCommand, ProgressPayload, RendererEvent},
+    tray::{update_tray_progress, update_tray_state},
+};
 use crate::timer_state_machine::{TimerStateMachine, load_timer_config};
 use crate::channels::{SensoryChannelsSystem, load_channel_config_array};
 use crate::renderers::RendererDispatcher;
@@ -123,19 +128,8 @@ impl Engine {
         }
         self.renderers.dispatch(logic_frame, &self.app);
 
-        // Update progress
-        let now = Instant::now();
-        if now.duration_since(self.last_progress_emit) >= PROGRESS_EMIT_INTERVAL
-            || frame_events.just_transited
-        {
-            if let Some(ch) = &self.progress_channel {
-                if let Err(e) = ch.send(ProgressPayload { timer_state: self.timer.state() }) {
-                    tracing::info!("Frontend's progress channel lost, discard the channel: {e}.");
-                    self.progress_channel = None;
-                };
-            }
-            self.last_progress_emit = now;
-        }
+        // Update frontend state
+        self.update_frontend_state(&frame_events);
 
         // Frame pacing
         let elapsed = frame_started_at.elapsed();
@@ -203,14 +197,14 @@ impl Engine {
 
         if !acked {
             tracing::warn!(
-                "renderer shutdown timed out after {:?}",
+                "renderer shutdown timed out after {:?}.",
                 SHUTDOWN_TIMEOUT
             );
         }
 
         // 3. Wait for persisting store to disk (synchronous, blocks until write completes).
         if let Err(e) = save_handle.join() {
-            tracing::error!("failed to save store during shutdown: {:?}", e);
+            tracing::error!("failed to save store during shutdown: {e:?}.");
         }
 
         self.cleaned_up = true;
@@ -219,6 +213,36 @@ impl Engine {
 
     fn recommended_tick_interval(&self) -> Duration {
         TARGET_FRAME_INTERVAL
+    }
+
+    fn update_frontend_state(&mut self, frame_events: &FrameEvents) {
+        let now = Instant::now();
+        // Update progress
+        if now.duration_since(self.last_progress_emit) >= PROGRESS_EMIT_INTERVAL
+            || frame_events.just_transited
+        {
+            let progress = ProgressPayload { timer_state: self.timer.state() };
+
+            if let Some(ch) = &self.progress_channel {
+                if let Err(e) = ch.send(progress.clone()) {
+                    tracing::info!("Frontend's progress channel lost, discard the channel: {e}.");
+                    self.progress_channel = None;
+                };
+            }
+
+            if let Err(err) = update_tray_progress(&self.app, progress) {
+                tracing::error!("Failed to update tray progress: {err:?}.")
+            }
+
+            self.last_progress_emit = now;
+        }
+
+        // Update tray
+        if frame_events.just_transited {
+            if let Err(err) = update_tray_state(&self.app, self.timer.state()) {
+                tracing::error!("Failed to update tray state: {err:?}.")
+            }
+        }
     }
 }
 
@@ -257,7 +281,7 @@ impl Drop for Engine {
 
             if !acked {
                 tracing::warn!(
-                    "renderer shutdown timed out after {:?}",
+                    "renderer shutdown timed out after {:?}.",
                     SHUTDOWN_TIMEOUT
                 );
             }

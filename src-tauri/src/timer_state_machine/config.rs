@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use tauri::Wry;
 use tauri_plugin_store::Store;
-use super::*;
 
 use crate::timer_state_machine::TimerStateMachine;
 

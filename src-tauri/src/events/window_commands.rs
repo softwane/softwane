@@ -1,0 +1,71 @@
+use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow};
+
+use crate::events::CommandError;
+
+
+/// Show the main window to foreground and set focus; create the main window it does not exist.
+pub async fn open_main_window<R: Runtime>(app_handle: AppHandle<R>) -> Result<(), CommandError> {
+    let window = match app_handle.get_webview_window("main") {
+        Some(window) => window,
+        None => {
+            tauri::WebviewWindowBuilder::new(
+                &app_handle,
+                "main",
+                WebviewUrl::App("index.html".into()),
+            )
+            .title("Softwane")
+            .inner_size(560.0, 420.0)
+            .resizable(true)
+            // .min_inner_size(480.0, 380.0)   // 除非明确需要，不限制窗口大小，最讨厌不能自定义窗口形状的应用
+            .visible(false) 
+            .build()
+            .map_err(|e| CommandError::CreateWindowFailed(e))?
+            // TODO: 如果启动窗口加载时间太长，幽灵启动，让前端展示自己
+            // return Ok(())
+        }
+    };
+    window.show().map_err(|e| CommandError::ShowWindowFailed(e))?;
+    if let Err(err) = window.set_focus() {
+        tracing::warn!("Failed to set focus to main window: {err:?}.")
+    };
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum WindowCommands {
+    Close,
+    Hide,
+}
+
+fn close_main_window<R: Runtime>(window: WebviewWindow<R>) -> Result<(), CommandError>{
+    window.close().map_err(|e| CommandError::CloseWindowFailed(e))?;
+    Ok(())
+}
+
+fn hide_main_window<R: Runtime>(window: WebviewWindow<R>) -> Result<(), CommandError> {
+    window.hide().map_err(|e| CommandError::HideWindowFailed(e))?;
+    Ok(())
+}
+
+pub async fn toggle_main_window<R: Runtime>(app_handle: AppHandle<R>, wincmd: WindowCommands) -> Result<(), CommandError> {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        match wincmd {
+            WindowCommands::Close => { return close_main_window(window);}
+            WindowCommands::Hide => {
+                if window.is_visible().map_err(|e| CommandError::OtherWindowError(e))? {
+                    return hide_main_window(window);
+                }
+            }
+        }
+        
+    };
+    open_main_window(app_handle).await
+}
+
+pub fn toggle_main_window_sync(app_handle: AppHandle, wincmd: WindowCommands) {
+    tauri::async_runtime::spawn(async move {
+        if let Err(err) = toggle_main_window(app_handle, wincmd).await {
+            tracing::error!("Failed to toggle main window from shortcut: {err:?}.");
+        }
+    });
+}

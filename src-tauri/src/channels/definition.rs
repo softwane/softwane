@@ -72,7 +72,7 @@ macro_rules! define_channels {
                         match (self, other) {
                             $( (Self::$val_var(a), Self::$val_var(b)) => Self::$val_var(a $op b), )*
                             _ => panic!(
-                                "Cannot {} between different channel values: {:?} and {:?}",
+                                "Cannot {} between different channel values: {:?} and {:?}.",
                                 stringify!($binop_method), self, other
                             ),
                         }

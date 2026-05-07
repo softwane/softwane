@@ -3,7 +3,7 @@ use tauri::{ipc::Channel, State};
 
 use crate::engine::EngineHandle;
 use crate::timer_state_machine::TimerState;
-use super::{EngineEvent, CommandError, foward};
+use super::{EngineEvent, CommandError, forward_engine};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -25,5 +25,5 @@ impl std::fmt::Debug for ProgressCommand {
 
 #[tauri::command]
 pub async fn register_progress_channel(engine_handle: State<'_, EngineHandle>, channel: Channel<ProgressPayload>) -> Result<(), CommandError> {
-    foward(&engine_handle, EngineEvent::Progress(ProgressCommand::RegisterChannel(channel))).await
+    forward_engine(engine_handle.tx.clone(), EngineEvent::Progress(ProgressCommand::RegisterChannel(channel))).await
 }

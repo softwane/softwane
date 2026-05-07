@@ -432,7 +432,7 @@ mod tests {
         t.tick(0, &mut fe);
         match t.state() {
             TimerState::Preview { progress } => assert!((progress - 0.5).abs() < 0.001),
-            other => panic!("expected Preview, got {:?}", other),
+            other => panic!("expected Preview, got {:?}.", other),
         }
 
         // Exit preview → Idle
@@ -476,7 +476,7 @@ mod tests {
         t.tick(10_000, &mut fe);
         match t.state() {
             TimerState::Preview { progress } => assert!((progress - 0.0).abs() < 0.001),
-            other => panic!("expected Preview, got {:?}", other),
+            other => panic!("expected Preview, got {:?}.", other),
         }
     }
 
@@ -526,7 +526,7 @@ mod tests {
         t.tick(0, &mut fe);
         match t.state() {
             TimerState::Preview { progress } => assert!((progress - 1.0).abs() < 0.001),
-            other => panic!("expected Preview, got {:?}", other),
+            other => panic!("expected Preview, got {:?}.", other),
         }
 
         let mut fe = empty_fe();
@@ -535,7 +535,7 @@ mod tests {
         t.tick(0, &mut fe);
         match t.state() {
             TimerState::Preview { progress } => assert!((progress - 0.0).abs() < 0.001),
-            other => panic!("expected Preview, got {:?}", other),
+            other => panic!("expected Preview, got {:?}.", other),
         }
     }
 

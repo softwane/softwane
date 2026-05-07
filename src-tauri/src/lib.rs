@@ -4,7 +4,7 @@ mod timer_state_machine;
 mod channels;
 mod renderers;
 mod utils;
-mod observability;
+mod shortcuts;
 mod tray;
 
 use engine::EngineHandle;
@@ -15,14 +15,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager, RunEvent};
+use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_store::StoreBuilder;
+
+use crate::events::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS};
+use crate::tray::notify_crash;
 
 static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
-        .manage(observability::ManagedObservability::default())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             let (event_tx, event_rx) = tokio::sync::mpsc::channel(256);
 
@@ -30,10 +38,17 @@ pub fn run() {
             let mut defaults: HashMap<String, serde_json::Value> = HashMap::new();
             defaults.extend(channels::store_defaults());
             defaults.extend(timer_state_machine::store_defaults());
+            defaults.insert(
+                STORE_KEY_PRESET_SESSION_DURATIONS.into(),
+                serde_json::json!(DEFAULT_DURATIONS),
+            );
             let store = StoreBuilder::new(app.handle(), "config.json")
                 .auto_save(Duration::from_secs(1))
                 .defaults(defaults)
                 .build()?;
+
+            // Autostart enabled by default
+            app.autolaunch().enable().ok();
 
             // Panic hook
             let store_for_hook = store.clone();
@@ -41,7 +56,7 @@ pub fn run() {
             std::panic::set_hook(Box::new(move |info| {
                 let msg = format!("{info}");
                 let _ = store_for_hook.set(
-                    "program_last_crash".to_string(),
+                    STORE_KEY_LAST_CRASH.to_string(),
                     serde_json::json!({
                         "message": msg,
                         "thread": std::thread::current()
@@ -56,17 +71,14 @@ pub fn run() {
                 );
                 let _ = store_for_hook.save();
 
-                // TODO: confer "8. Panic 提示策略：tray 双信号" in refactor.plan.md
-                if let Some(tray) = app_for_hook.tray_by_id("main") {
-                    let _ = tray.set_title(Some("Err"));
-                }
+                notify_crash(&app_for_hook);
             }));
 
             let engine = engine::Engine::new(
                 app.handle().clone(),
                 event_rx,
                 event_tx.clone(),
-                store,
+                store.clone(),
             );
             let engine_join = std::thread::spawn(move || engine.run());
 
@@ -76,6 +88,13 @@ pub fn run() {
             });
 
             tray::setup_tray(app.handle())?;
+            shortcuts::setup_global_shortcuts(app.handle());
+
+            // Crash recovery: notify tray if last run crashed
+            if store.get(STORE_KEY_LAST_CRASH).is_some() {
+                tray::notify_crash(app.handle());
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -95,7 +114,13 @@ pub fn run() {
             events::update_settling_curve_params,
             events::update_reverse_curve_params,
             events::register_progress_channel,
-            events::get_stored_config,
+            events::get_available_stored_config,
+            events::get_preset_session_durations,
+            events::update_preset_session_durations,
+            events::get_last_crash,
+            events::acknowledge_crash,
+            events::set_autostart_enabled,
+            events::is_autostart_enabled,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Erode App");

@@ -74,7 +74,7 @@ impl std::ops::Index<TimerState> for StateParamsTable {
             TimerState::Settling { .. } => &self.0[1],
             TimerState::Reverse { .. } => &self.0[2],
             _ => unreachable!(
-                "Invalid timer state for StateParamsTable: {:?}",
+                "Invalid timer state for StateParamsTable: {:?}.",
                 index.label()
             ),
         }
@@ -88,7 +88,7 @@ impl std::ops::IndexMut<TimerState> for StateParamsTable {
             TimerState::Settling { .. } => &mut self.0[1],
             TimerState::Reverse { .. } => &mut self.0[2],
             _ => unreachable!(
-                "Invalid timer state for StateParamsTable: {:?}",
+                "Invalid timer state for StateParamsTable: {:?}.",
                 index.label()
             ),
         }

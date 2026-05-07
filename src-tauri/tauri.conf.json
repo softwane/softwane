@@ -10,17 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Erode App",
-        "label": "main",
-        "width": 560,
-        "height": 420,
-        "minWidth": 480,
-        "minHeight": 380,
-        "resizable": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }
