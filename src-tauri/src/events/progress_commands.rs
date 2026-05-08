@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::{State, ipc::Channel};
 
-use crate::{engine::EngineHandle, timer_state_machine::TimerState};
+use crate::{engine::EngineHandle, events::forward_engine_sync, timer_state_machine::TimerState};
 use super::{EngineEvent::Progress, CommandError, forward_engine};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,6 +31,6 @@ pub async fn register_progress_channel(engine_handle: State<'_, EngineHandle>, c
 }
 
 #[tauri::command]
-pub async fn clear_progress_channel(engine_handle: State<'_, EngineHandle>) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), Progress(ClearChannel)).await
+pub fn clear_progress_channel(engine_handle: State<'_, EngineHandle>) {
+    forward_engine_sync(engine_handle.tx.clone(), Progress(ClearChannel))
 }

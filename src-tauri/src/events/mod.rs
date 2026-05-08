@@ -79,7 +79,7 @@ pub(super) fn forward_engine_sync(
 )  {
     tauri::async_runtime::spawn(async move {
         if let Err(err) = forward_engine(tx, event).await {
-            tracing::error!("Failed to forward engine event from tray: {err:?}.");
+            tracing::error!("Failed to forward engine event: {err:?}.");
         }
     });
 }

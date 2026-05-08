@@ -1,12 +1,11 @@
-use tauri::{AppHandle, Runtime, State};
+use tauri::{AppHandle, Runtime, State as TauriState};
 use tauri_plugin_store::StoreExt;
 
 use crate::{
     engine::EngineHandle,
-    events::forward_engine_nowait,
     tray::refresh_tray_menu,
 };
-use super::{EngineEvent, CommandError, forward_engine};
+use super::{EngineEvent::State, CommandError, forward_engine_nowait, forward_engine};
 
 #[derive(Debug)]
 pub enum StateCommand {
@@ -27,47 +26,48 @@ pub enum StateCommand {
         duration_ms: u64,
     },
 }
+use StateCommand::*;
 
 // TODO: 也许，允许用户通过快捷键呼出一个窗口输入多少分钟的session
 // 这个窗口可以是原生的，因为就是一个输入框，比launcher还简单
 #[tauri::command]
-pub async fn start_session(engine_handle: State<'_, EngineHandle>, target_duration_ms: u64) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), EngineEvent::State(StateCommand::StartSession { target_duration_ms })).await
+pub async fn start_session(engine_handle: TauriState<'_, EngineHandle>, target_duration_ms: u64) -> Result<(), CommandError> {
+    forward_engine(engine_handle.tx.clone(), State(StartSession { target_duration_ms })).await
 }
 
 #[tauri::command]
-pub async fn take_break_now(engine_handle: State<'_, EngineHandle>) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), EngineEvent::State(StateCommand::TakeBreakNow)).await
+pub async fn take_break_now(engine_handle: TauriState<'_, EngineHandle>) -> Result<(), CommandError> {
+    forward_engine(engine_handle.tx.clone(), State(TakeBreakNow)).await
 }
 
 #[tauri::command]
-pub async fn stop_session(engine_handle: State<'_, EngineHandle>) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), EngineEvent::State(StateCommand::StopSession)).await
+pub async fn stop_session(engine_handle: TauriState<'_, EngineHandle>) -> Result<(), CommandError> {
+    forward_engine(engine_handle.tx.clone(), State(StopSession)).await
 }
 
 #[tauri::command]
-pub async fn enter_preview(engine_handle: State<'_, EngineHandle>) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), EngineEvent::State(StateCommand::EnterPreview)).await
+pub async fn enter_preview(engine_handle: TauriState<'_, EngineHandle>) -> Result<(), CommandError> {
+    forward_engine(engine_handle.tx.clone(), State(EnterPreview)).await
 }
 
 #[tauri::command]
-pub async fn exit_preview(engine_handle: State<'_, EngineHandle>) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), EngineEvent::State(StateCommand::ExitPreview)).await
+pub async fn exit_preview(engine_handle: TauriState<'_, EngineHandle>) -> Result<(), CommandError> {
+    forward_engine(engine_handle.tx.clone(), State(ExitPreview)).await
 }
 
 #[tauri::command]
-pub fn update_preview_progress(engine_handle: State<'_, EngineHandle>, progress: f64) -> Result<(), CommandError> {
-    forward_engine_nowait(engine_handle.tx.clone(), EngineEvent::State(StateCommand::UpdatePreviewProgress { progress }))
+pub fn update_preview_progress(engine_handle: TauriState<'_, EngineHandle>, progress: f64) -> Result<(), CommandError> {
+    forward_engine_nowait(engine_handle.tx.clone(), State(UpdatePreviewProgress { progress }))
 }
 
 #[tauri::command]
-pub async fn update_settling_duration(engine_handle: State<'_, EngineHandle>, duration_ms: u64) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), EngineEvent::State(StateCommand::UpdateSettlingDuration { duration_ms })).await
+pub async fn update_settling_duration(engine_handle: TauriState<'_, EngineHandle>, duration_ms: u64) -> Result<(), CommandError> {
+    forward_engine(engine_handle.tx.clone(), State(UpdateSettlingDuration { duration_ms })).await
 }
 
 #[tauri::command]
-pub async fn update_reverse_duration(engine_handle: State<'_, EngineHandle>, duration_ms: u64) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), EngineEvent::State(StateCommand::UpdateReverseDuration { duration_ms })).await
+pub async fn update_reverse_duration(engine_handle: TauriState<'_, EngineHandle>, duration_ms: u64) -> Result<(), CommandError> {
+    forward_engine(engine_handle.tx.clone(), State(UpdateReverseDuration { duration_ms })).await
 }
 
 pub const STORE_KEY_PRESET_SESSION_DURATIONS: &str = "session_durations_ms";

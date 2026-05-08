@@ -2,7 +2,6 @@ use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow};
 
 use crate::events::CommandError;
 
-
 /// Show the main window to foreground and set focus; create the main window it does not exist.
 pub async fn open_main_window<R: Runtime>(app_handle: AppHandle<R>) -> Result<(), CommandError> {
     let window = match app_handle.get_webview_window("main") {
