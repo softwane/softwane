@@ -1,7 +1,6 @@
 mod timer_state_commands;
 mod channel_commands;
 mod renderer_events;
-mod progress_commands;
 mod window_commands;
 
 use serde::Serialize;
@@ -19,7 +18,6 @@ use crate::timer_state_machine::load_timer_config;
 pub use self::timer_state_commands::*;
 pub use self::channel_commands::*;
 pub use self::renderer_events::*;
-pub use self::progress_commands::*;
 pub use self::window_commands::*;
 
 pub const STORE_KEY_LAST_CRASH: &str = "program_last_crash";
@@ -68,6 +66,7 @@ async fn forward_engine(
     tx: Sender<EngineEvent>,
     event: EngineEvent,
 ) -> Result<(), CommandError> {
+    tracing::debug!("forward_engine: Sending event: {event:?}");
     tx.send(event).await?;
     Ok(())
 }

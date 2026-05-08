@@ -1,7 +1,11 @@
 use tauri::{AppHandle, Runtime, State};
 use tauri_plugin_store::StoreExt;
 
-use crate::{engine::EngineHandle, events::forward_engine_nowait, shortcuts::setup_global_shortcuts};
+use crate::{
+    engine::EngineHandle,
+    events::forward_engine_nowait,
+    tray::refresh_tray_menu,
+};
 use super::{EngineEvent, CommandError, forward_engine};
 
 #[derive(Debug)]
@@ -24,6 +28,8 @@ pub enum StateCommand {
     },
 }
 
+// TODO: 也许，允许用户通过快捷键呼出一个窗口输入多少分钟的session
+// 这个窗口可以是原生的，因为就是一个输入框，比launcher还简单
 #[tauri::command]
 pub async fn start_session(engine_handle: State<'_, EngineHandle>, target_duration_ms: u64) -> Result<(), CommandError> {
     forward_engine(engine_handle.tx.clone(), EngineEvent::State(StateCommand::StartSession { target_duration_ms })).await
@@ -51,7 +57,6 @@ pub async fn exit_preview(engine_handle: State<'_, EngineHandle>) -> Result<(), 
 
 #[tauri::command]
 pub fn update_preview_progress(engine_handle: State<'_, EngineHandle>, progress: f64) -> Result<(), CommandError> {
-    tracing::debug!("Updating preview progress: {progress}");
     forward_engine_nowait(engine_handle.tx.clone(), EngineEvent::State(StateCommand::UpdatePreviewProgress { progress }))
 }
 
@@ -95,8 +100,19 @@ pub fn update_preset_session_durations(app_handle: AppHandle, durations: Vec<u64
     let store = app_handle.store("config.json")?;
     store.set(
         STORE_KEY_PRESET_SESSION_DURATIONS.to_string(),
-        serde_json::to_value::<[u64; 3]>(durations.try_into().unwrap()).expect("Vec<u64> serialization is infallible"),
+        serde_json::to_value::<[u64; 3]>(durations.try_into().unwrap()).expect("[u64; 3] serialization is infallible"),
     );
-    setup_global_shortcuts(&app_handle);
+
+    // Shortcut callbacks read preset durations from the store at fire
+    // time (see `shortcuts::start_preset_event`), so re-registering
+    // the global shortcuts is unnecessary on duration change.
+
+    // Preset duration labels are baked into the tray menu (see
+    // `tray::build_menu`).  Reading the current TimerState from the
+    // shared cache, we can rebuild the menu while preserving the
+    // correct enable/disable flags for the active phase.
+    if let Err(err) = refresh_tray_menu(&app_handle) {
+        tracing::error!("Failed to refresh tray menu after updating preset durations: {err:?}.");
+    }
     Ok(())
 }

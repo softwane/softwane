@@ -5,6 +5,7 @@ mod channels;
 mod renderers;
 mod utils;
 mod shortcuts;
+mod state;
 mod tray;
 
 use engine::EngineHandle;
@@ -20,8 +21,10 @@ use tauri_plugin_store::StoreBuilder;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use crate::events::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS};
+use crate::shortcuts::{STORE_KEY_SHORTCUT_BINDINGS, default_shortcut_bindings};
 use crate::tray::notify_crash;
 
+#[allow(dead_code)]
 struct LogGuard(tracing_appender::non_blocking::WorkerGuard);
 
 static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
@@ -69,6 +72,11 @@ pub fn run() {
                 STORE_KEY_PRESET_SESSION_DURATIONS.into(),
                 serde_json::json!(DEFAULT_DURATIONS),
             );
+            defaults.insert(
+                STORE_KEY_SHORTCUT_BINDINGS.into(),
+                serde_json::to_value(default_shortcut_bindings())
+                    .expect("default shortcut bindings serialise"),
+            );
             let store = StoreBuilder::new(app.handle(), "config.json")
                 .auto_save(Duration::from_secs(1))
                 .defaults(defaults)
@@ -103,11 +111,14 @@ pub fn run() {
                 notify_crash(&app_for_hook);
             }));
 
+            let shared_state = state::SharedTimerState::new();
+
             let engine = engine::Engine::new(
                 app.handle().clone(),
                 event_rx,
                 event_tx.clone(),
                 store.clone(),
+                shared_state.clone(),
             );
             let engine_join = std::thread::spawn(move || engine.run());
 
@@ -115,6 +126,7 @@ pub fn run() {
                 tx: event_tx,
                 join: std::sync::Mutex::new(Some(engine_join)),
             });
+            app.manage(shared_state);
 
             tray::setup_tray(app.handle())?;
             shortcuts::setup_global_shortcuts(app.handle());
@@ -150,6 +162,8 @@ pub fn run() {
             events::acknowledge_crash,
             events::set_autostart_enabled,
             events::is_autostart_enabled,
+            shortcuts::get_shortcut_bindings,
+            shortcuts::update_shortcut_bindings,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Erode App");

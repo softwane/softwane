@@ -20,11 +20,17 @@ pub struct WindowsRendererDispatcher {
 }
 
 impl WindowsRendererDispatcher {
-    pub fn new(tx: Sender<EngineEvent>) -> Self {
-        Self {
+    pub fn new(
+        tx: Sender<EngineEvent>,
+        states: ChannelSwitchStates,
+        app: &AppHandle,
+    ) -> Self {
+        let mut this = Self {
             tx,
             color_transformer: WinMagAPIColorTransformer::default(),
-        }
+        };
+        this.switch_renderer(states, app);
+        this
     }
 
     pub fn dispatch(&mut self, logic_frame: Arc<LogicFrame>, app: &AppHandle) {

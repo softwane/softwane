@@ -21,6 +21,7 @@ pub async fn open_main_window<R: Runtime>(app_handle: AppHandle<R>) -> Result<()
             .build()
             .map_err(|e| CommandError::CreateWindowFailed(e))?
             // TODO: 如果启动窗口加载时间太长，幽灵启动，让前端展示自己
+            // 若如此，则拆分为show_and_focus与build。
             // return Ok(())
         }
     };
@@ -49,6 +50,11 @@ fn hide_main_window<R: Runtime>(window: WebviewWindow<R>) -> Result<(), CommandE
 
 pub async fn toggle_main_window<R: Runtime>(app_handle: AppHandle<R>, wincmd: WindowCommands) -> Result<(), CommandError> {
     if let Some(window) = app_handle.get_webview_window("main") {
+        if !window.is_visible().map_err(|e| CommandError::OtherWindowError(e))? 
+        || !window.is_focused().map_err(|e| CommandError::OtherWindowError(e))? {
+            return open_main_window(app_handle).await;
+        }
+
         match wincmd {
             WindowCommands::Close => { return close_main_window(window);}
             WindowCommands::Hide => {

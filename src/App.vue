@@ -1,114 +1,159 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import erodeMark from "./assets/erode-mark.svg";
 import { useAppearance } from "./composables/useAppearance";
-import { useTimerSession } from "./composables/useTimerSession";
-
-const isSettingsOpen = ref(false);
-const bodyMatrixValues = ref(identityMatrix().map((v) => v.toFixed(6)).join(" "));
-let bodyMatrix = identityMatrix();
-let bodyMatrixFrame = null;
-
-const cueStyleOptions = [
-  {
-    id: "dim",
-    label: "Dim fade",
-    description: "Make the screen visibly darker and ashier."
-  },
-  {
-    id: "warm",
-    label: "Warm drift",
-    description: "Balanced warmth and fade for everyday use."
-  },
-  {
-    id: "full",
-    label: "Full erosion",
-    description: "Push warmth, dimming, and washout hardest."
-  }
-];
-
-const themeModeOptions = [
-  {
-    id: "auto",
-    label: "Auto",
-    description: "Follow the system appearance and switch live."
-  },
-  {
-    id: "dark",
-    label: "Dark",
-    description: "Always keep the app in dark mode."
-  },
-  {
-    id: "light",
-    label: "Light",
-    description: "Always keep the app in light mode."
-  }
-];
-
-const {
-  resolvedTheme,
-  setThemeMode,
-  themeMode
-} = useAppearance();
-
-const {
-  workDuration,
+import { useDraft } from "./composables/useDraft";
+import KeyBindingInput from "./components/KeyBindingInput.vue";
+import { SHORTCUT_ACTIONS } from "./api/types";
+import {
+  init,
+  refreshConfig,
   channelConfigs,
+  timerConfig,
+  presetDurations,
+  shortcutBindings,
+  timerState,
+  epoch,
+  previewProgress,
   startSession,
   takeBreakNow,
-  startReverse,
-  currentPhase,
-  isIdle,
-  isForward,
-  isSettling,
-  isSabi,
-  isReverse,
-  hasActiveSession,
-  isWorkDurationSupported,
-  displayTime,
-  progress,
-  phaseLabel,
-  frame,
-} = useTimerSession();
+  stopSession,
+  toggleChannel,
+  updateSettlingDuration,
+  updateReverseDuration,
+  forceReset,
+  enterPreview,
+  exitPreview,
+  setPreviewProgress,
+  saveShortcutPresetDurations,
+  saveShortcutBindings,
+  updateChannelProgressBeginRatio,
+  updateChannelTargetValue,
+  updateChannelCurveParams,
+} from "./state/engineState";
 
-const channelEnabled = computed(() => {
-  const set = new Set(channelConfigs.value.map((c) => c.channel_type));
-  return {
-    saturation: set.has("saturation"),
-    warmth: set.has("warmth"),
-    brightness: set.has("brightness"),
-  };
+const isSettingsOpen = ref(false);
+const workMinutes = ref(50);
+
+const themeModeOptions = [
+  { id: "auto", label: "Auto", description: "Follow the system appearance and switch live." },
+  { id: "dark", label: "Dark", description: "Always keep the app in dark mode." },
+  { id: "light", label: "Light", description: "Always keep the app in light mode." },
+];
+
+const { resolvedTheme, setThemeMode, themeMode } = useAppearance();
+
+// ── Channel helpers ────────────────────────────────────────────────────
+
+function findChannelConfig(type) {
+  const entry = channelConfigs.value.find(([t]) => t === type);
+  return entry ? entry[1] : null;
+}
+
+function getChannelTargetValueDisplay(type, cfg) {
+  if (!cfg) return 0;
+  const tv = cfg.persistent_state_params_table.target_channel_value;
+  if (type === "saturation") return tv.saturation ?? 0;
+  if (type === "color_temp") return tv.color_temp_kelvin ?? 6500;
+  if (type === "brightness") return tv.brightness ?? 1;
+  return 0;
+}
+
+function getChannelSteepness(type) {
+  const cfg = findChannelConfig(type);
+  if (!cfg) return 10;
+  return cfg.persistent_state_params_table.progress_curve_parameters.normalized_sigmoid?.steepness ?? 10;
+}
+
+function getChannelBeginRatio(type) {
+  const cfg = findChannelConfig(type);
+  return cfg?.persistent_state_params_table.progress_begin_ratio ?? 0.9;
+}
+
+function onChannelTargetChange(type, value) {
+  const num = Number(value);
+  if (type === "saturation") updateChannelTargetValue(type, { saturation: num });
+  else if (type === "color_temp") updateChannelTargetValue(type, { color_temp_kelvin: Math.round(num) });
+  else if (type === "brightness") updateChannelTargetValue(type, { brightness: num });
+}
+
+// ── Derived from state ────────────────────────────────────────────────
+
+const currentPhase = computed(() => timerState.value?.state ?? "idle");
+const isIdle = computed(() => currentPhase.value === "idle");
+const isProgress = computed(() => currentPhase.value === "progress");
+const isSettling = computed(() => currentPhase.value === "settling");
+const isSabi = computed(() => currentPhase.value === "sabi");
+const isReverse = computed(() => currentPhase.value === "reverse");
+const isPreview = computed(() => currentPhase.value === "preview");
+const hasActiveSession = computed(() => !isIdle.value && !isPreview.value);
+
+const phaseLabel = computed(() => {
+  const ts = timerState.value;
+  if (!ts) return "Idle";
+  return ts.state.charAt(0).toUpperCase() + ts.state.slice(1);
 });
 
-function toggleChannel(type, defaultConfig) {
-  const idx = channelConfigs.value.findIndex((c) => c.channel_type === type);
-  if (idx >= 0) {
-    channelConfigs.value = channelConfigs.value.filter((_, i) => i !== idx);
-  } else {
-    channelConfigs.value = [...channelConfigs.value, defaultConfig];
+const elapsedMs = computed(() => {
+  void epoch.value;
+  const ts = timerState.value;
+  if (ts && "elapsed_ms" in ts) return ts.elapsed_ms;
+  return 0;
+});
+
+const targetDurationMs = computed(() => {
+  const ts = timerState.value;
+  if (ts && "target_duration_ms" in ts) return ts.target_duration_ms;
+  return 0;
+});
+
+const remainingMs = computed(() => {
+  void epoch.value;
+  if (isProgress.value || isSettling.value || isReverse.value) {
+    return Math.max(0, targetDurationMs.value - elapsedMs.value);
   }
+  return 0;
+});
+
+function formatClock(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.floor(totalSeconds % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+
+const displayTime = computed(() => {
+  if (isProgress.value || isSettling.value)
+    return formatClock(Math.ceil(remainingMs.value / 1000));
+  if (isIdle.value)
+    return formatClock(Math.max(workMinutes.value, 0) * 60);
+  return "";
+});
+
+const progressValue = computed(() => {
+  if (isPreview.value && timerState.value && "progress" in timerState.value)
+    return Math.max(0, Math.min(1, timerState.value.progress));
+  if (!isProgress.value || targetDurationMs.value <= 0) return 0;
+  return Math.max(0, Math.min(1, elapsedMs.value / targetDurationMs.value));
+});
+
+const channelEnabled = computed(() => {
+  const map = {};
+  for (const [type, cfg] of channelConfigs.value) map[type] = cfg.switch_on;
+  return map;
+});
 
 const phaseTone = computed(() => {
   switch (currentPhase.value) {
-    case "forward":
-      return "phase-forward";
-    case "settling":
-      return "phase-settling";
-    case "sabi":
-      return "phase-sabi";
-    case "reverse":
-      return "phase-reverse";
-    default:
-      return "phase-idle";
+    case "progress": return "phase-forward";
+    case "settling": return "phase-settling";
+    case "sabi": return "phase-sabi";
+    case "reverse": return "phase-reverse";
+    default: return "phase-idle";
   }
 });
 
-const showTimerValue = computed(() => isForward.value || isSettling.value || isIdle.value);
-
-const progressStyle = computed(() => ({
-  transform: `scaleX(${progress.value})`,
-}));
+const showTimerValue = computed(() => isProgress.value || isSettling.value || isIdle.value);
+const progressStyle = computed(() => ({ transform: `scaleX(${progressValue.value})` }));
 
 const secondaryStatusLine = computed(() => {
   if (isSettling.value) return "Settling into rest";
@@ -118,448 +163,331 @@ const secondaryStatusLine = computed(() => {
 });
 
 const themeModeSummary = computed(() => {
-  if (themeMode.value === "auto") {
+  if (themeMode.value === "auto")
     return `Auto, ${resolvedTheme.value === "dark" ? "dark now" : "light now"}`;
-  }
-
   return `${resolvedTheme.value === "dark" ? "Dark" : "Light"} fixed`;
 });
 
-function handleProgressScrub(value) {
-  if (
-    sessionStage.value !== "Work" ||
-    sessionStatus.value !== "Running" ||
-    isEndingEarly.value ||
-    sessionIsEarlyEnding.value
-  ) {
-    return;
-  }
+const canTakeBreak = computed(() => isProgress.value);
+const canStop = computed(() => isProgress.value || isSettling.value || isSabi.value);
+const canStartNewSession = computed(() => isIdle.value);
+const isStartLayerOpen = ref(true);
 
-  void setSessionProgressPercent(value);
+function hasChannel(type) { return channelConfigs.value.some(([t]) => t === type); }
+function channelLabel(type) { return type === "color_temp" ? "Warmth" : type.charAt(0).toUpperCase() + type.slice(1); }
+
+function openStartLayer() {
+  isStartLayerOpen.value = true;
 }
-const workDurationMessage = computed(() => {
-  if (isWorkDurationSupported.value) return "";
-  return "Sessions shorter than 2 minutes are unsupported.";
+
+function onStartSession() {
+  const ms = Math.max(1, Math.min(120, Number(workMinutes.value) || 50)) * 60_000;
+  startSession(ms);
+  isStartLayerOpen.value = false;
+}
+
+function onToggleChannel(type, checked) { toggleChannel(type, checked); }
+
+async function onOpenSettings() {
+  await refreshConfig();
+  isSettingsOpen.value = true;
+}
+
+function onCloseSettings() { isSettingsOpen.value = false; }
+
+// ── Preset durations (Save / Cancel) ──────────────────────────────────
+
+const presetDraft = useDraft(presetDurations, async (d) => {
+  await saveShortcutPresetDurations(d);
 });
+const presetSaveError = ref("");
 
-const canTakeBreak = computed(() => isForward.value);
-const canstartReverse = computed(() => isForward.value || isSettling.value || isSabi.value);
-
-const isCueActive = computed(() => hasActiveSession.value && !isIdle.value);
-
-// --- Color matrix for in-window preview ---
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+function onDraftDurationChange(index, value) {
+  const v = Math.max(60_000, Number(value) * 60_000 || 60_000);
+  presetDraft.draft.value = [
+    ...presetDraft.draft.value.slice(0, index),
+    v,
+    ...presetDraft.draft.value.slice(index + 1),
+  ];
 }
 
-function identityMatrix() {
-  return [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0];
-}
-
-function multiplyColorMatrices(left, right) {
-  const result = new Array(20).fill(0);
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 5; col++) {
-      const i = row * 5 + col;
-      if (col === 4) {
-        result[i] =
-          left[row * 5 + 4] +
-          left[row * 5] * right[4] +
-          left[row * 5 + 1] * right[9] +
-          left[row * 5 + 2] * right[14] +
-          left[row * 5 + 3] * right[19];
-      } else {
-        result[i] =
-          left[row * 5] * right[col] +
-          left[row * 5 + 1] * right[5 + col] +
-          left[row * 5 + 2] * right[10 + col] +
-          left[row * 5 + 3] * right[15 + col];
-      }
-    }
+async function onPresetSave() {
+  presetSaveError.value = "";
+  try {
+    await presetDraft.commit();
+  } catch (e) {
+    presetSaveError.value = String(e);
   }
-  return result;
 }
 
-function interpolateMatrices(from, to, t) {
-  return from.map((v, i) => v + (to[i] - v) * t);
+function onPresetCancel() {
+  presetSaveError.value = "";
+  presetDraft.cancel();
 }
 
-function easeInOut(t) {
-  return t * t * (3 - 2 * t);
-}
+// ── Shortcut bindings (Save / Cancel) ─────────────────────────────────
 
-function saturationMatrix(amount) {
-  const r = 0.2126, g = 0.7152, b = 0.0722;
-  const inv = 1 - amount;
-  return [
-    inv * r + amount, inv * g, inv * b, 0, 0,
-    inv * r, inv * g + amount, inv * b, 0, 0,
-    inv * r, inv * g, inv * b + amount, 0, 0,
-    0, 0, 0, 1, 0,
-  ];
-}
+const shortcutLabels = {
+  start_preset1: "Start preset 1",
+  start_preset2: "Start preset 2",
+  start_preset3: "Start preset 3",
+  take_break_now: "Take a break now",
+  stop_session: "Stop session",
+  toggle_preview: "Toggle preview",
+  force_reset: "Force reset",
+  toggle_main_window: "Toggle window",
+};
 
-function warmthMatrix(amount) {
-  return [
-    1 + amount * 0.16, 0, 0, 0, 0,
-    0, 1 + amount * 0.02, 0, 0, 0,
-    0, 0, 1 - amount * 0.22, 0, 0,
-    0, 0, 0, 1, 0,
-  ];
-}
-
-function brightnessMatrix(amount) {
-  return [
-    amount, 0, 0, 0, 0,
-    0, amount, 0, 0, 0,
-    0, 0, amount, 0, 0,
-    0, 0, 0, 1, 0,
-  ];
-}
-
-function kelvinToWarmth(k) {
-  return clamp((6500 - k) / 4500, 0, 1);
-}
-
-const targetBodyMatrix = computed(() => {
-  const f = frame.value;
-  const warmth = kelvinToWarmth(f.warmthKelvin ?? 6500);
-  const sat = clamp(f.saturation ?? 1, 0, 1);
-  const bright = clamp(f.brightness ?? 1, 0, 1);
-
-  return [brightnessMatrix(bright), warmthMatrix(warmth), saturationMatrix(sat)].reduce(
-    (acc, m) => multiplyColorMatrices(acc, m),
-    identityMatrix()
-  );
+const shortcutDraft = useDraft(shortcutBindings, async (b) => {
+  await saveShortcutBindings(b);
 });
+const shortcutSaveError = ref("");
 
-const resolvedBodyMatrix = computed(() =>
-  isCueActive.value ? targetBodyMatrix.value : identityMatrix()
-);
-
-function stopBodyMatrixAnimation() {
-  if (bodyMatrixFrame) {
-    window.cancelAnimationFrame(bodyMatrixFrame);
-    bodyMatrixFrame = null;
-  }
-}
-
-function updateBodyMatrixValues(matrix) {
-  bodyMatrix = matrix;
-  bodyMatrixValues.value = matrix.map((v) => v.toFixed(6)).join(" ");
-}
-
-function animateBodyMatrix(target, durationMs) {
-  stopBodyMatrixAnimation();
-  const start = [...bodyMatrix];
-  const dist = start.reduce((t, v, i) => t + Math.abs(v - target[i]), 0);
-  if (dist < 0.0001) {
-    updateBodyMatrixValues(target);
-    return;
-  }
-  const t0 = window.performance.now();
-  const tick = (now) => {
-    const p = clamp((now - t0) / durationMs, 0, 1);
-    updateBodyMatrixValues(interpolateMatrices(start, target, easeInOut(p)));
-    if (p < 1) {
-      bodyMatrixFrame = window.requestAnimationFrame(tick);
-    } else {
-      bodyMatrixFrame = null;
-    }
+function setShortcutBinding(action, binding) {
+  if (!shortcutDraft.draft.value) return;
+  shortcutDraft.draft.value = {
+    ...shortcutDraft.draft.value,
+    [action]: binding,
   };
-  bodyMatrixFrame = window.requestAnimationFrame(tick);
 }
 
-watch(
-  resolvedBodyMatrix,
-  (matrix) => {
-    const isLive = isForward.value || isSettling.value || isReverse.value;
-    animateBodyMatrix(matrix, isLive ? 300 : 2800);
-  },
-  { immediate: true }
-);
-
-function handlestartSession() {
-  startSession();
+/** Stringify a binding's (sorted modifiers, code) for collision matching. */
+function bindingFingerprint(b) {
+  if (!b) return "";
+  const mods = [...b.modifiers].sort().join("+");
+  return `${mods}::${b.code}`;
 }
 
-onMounted(() => {
-  document.body.style.filter = "url(#erode-color-filter)";
-
-  if (window.__TAURI__) {
-    const { listen: tauriListen } = window.__TAURI__.event;
-    tauriListen("tray-take-break", () => takeBreakNow());
-    tauriListen("tray-start-reverse", () => startReverse());
+/**
+ * Collisions in the current draft: returns a Set of action ids that
+ * share their fingerprint with at least one other action.
+ */
+const shortcutConflicts = computed(() => {
+  const conflicts = new Set();
+  if (!shortcutDraft.draft.value) return conflicts;
+  const fpToAction = new Map();
+  for (const action of SHORTCUT_ACTIONS) {
+    const b = shortcutDraft.draft.value[action];
+    const fp = bindingFingerprint(b);
+    if (!fp) continue;
+    if (fpToAction.has(fp)) {
+      conflicts.add(fpToAction.get(fp));
+      conflicts.add(action);
+    } else {
+      fpToAction.set(fp, action);
+    }
   }
+  return conflicts;
 });
 
-onUnmounted(() => {
-  stopBodyMatrixAnimation();
-  document.body.style.filter = "";
+const shortcutHasConflict = computed(() => shortcutConflicts.value.size > 0);
+
+const conflictBannerText = computed(() => {
+  const ids = [...shortcutConflicts.value];
+  if (ids.length === 0) return "";
+  const labels = ids.map((id) => shortcutLabels[id] ?? id);
+  return `Conflict: ${labels.join(", ")} share the same combination.`;
 });
+
+async function onShortcutSave() {
+  shortcutSaveError.value = "";
+  if (shortcutHasConflict.value) {
+    shortcutSaveError.value = "Resolve conflicts before saving.";
+    return;
+  }
+  try {
+    await shortcutDraft.commit();
+  } catch (e) {
+    shortcutSaveError.value = String(e);
+  }
+}
+
+function onShortcutCancel() {
+  shortcutSaveError.value = "";
+  shortcutDraft.cancel();
+}
+
+// ── Lifecycle ─────────────────────────────────────────────────────────
+
+onMounted(() => { init(); });
 </script>
 
 <template>
-  <svg width="0" height="0" aria-hidden="true" class="visual-filter-defs">
-    <filter id="erode-color-filter" color-interpolation-filters="sRGB">
-      <feColorMatrix type="matrix" :values="bodyMatrixValues" />
-    </filter>
-  </svg>
-
   <main class="app-shell">
     <section class="timer-app">
       <header class="topbar">
         <img class="brand-mark" :src="erodeMark" alt="Erode" />
-        <button
-          class="ghost-button ghost-button-utility"
-          type="button"
-          @click="isSettingsOpen = true"
-        >
-          Tune
-        </button>
+        <button class="ghost-button ghost-button-utility" type="button" @click="onOpenSettings">Tune</button>
       </header>
 
       <section class="timer-core">
         <span :class="['phase-dot', phaseTone]"></span>
         <p class="status-line">{{ phaseLabel }}</p>
-        <h1
-          :class="['timer-value', { 'is-hidden-in-break': !showTimerValue }]"
-        >
+        <h1 :class="['timer-value', { 'is-hidden-in-break': !showTimerValue }]">
           {{ showTimerValue ? displayTime : "\u00A0" }}
         </h1>
-        <p
-          :class="[
-            'status-line',
-            'status-line-secondary',
-            { 'is-empty': !secondaryStatusLine },
-          ]"
-        >
+        <p :class="['status-line', 'status-line-secondary', { 'is-empty': !secondaryStatusLine }]">
           {{ secondaryStatusLine || "\u00A0" }}
         </p>
       </section>
 
       <section class="progress-panel">
-        <div class="progress-track">
-          <div class="progress-fill" :style="progressStyle"></div>
-        </div>
+        <div class="progress-track"><div class="progress-fill" :style="progressStyle"></div></div>
       </section>
 
       <section class="action-row">
-        <button
-          v-if="canTakeBreak"
-          key="take-break"
-          class="action-button action-primary"
-          type="button"
-          @click="takeBreakNow"
-        >
-          Take a break now
-        </button>
-        <button
-          v-if="canstartReverse"
-          key="stop"
-          class="action-button"
-          type="button"
-          @click="startReverse"
-        >
-          Stop
-        </button>
-        <button
-          v-if="canstartReverse"
-          key="start-reverse"
-          class="action-button action-primary"
-          type="button"
-          @click="startReverse"
-        >
-          Return from break
-        </button>
+        <button v-if="canTakeBreak" class="action-button action-primary" type="button" @click="takeBreakNow">Take a break now</button>
+        <button v-if="canStop" class="action-button" type="button" @click="stopSession">Stop</button>
+        <button v-if="canStartNewSession" class="action-button action-primary" type="button" @click="openStartLayer">Start a new session</button>
       </section>
     </section>
 
-    <!-- Start layer (shown when Idle) -->
-    <section
-      :class="['settings-layer', 'start-layer', { 'is-active': isIdle }]"
-      role="dialog"
-      :aria-hidden="!isIdle"
-      :aria-modal="isIdle ? 'true' : 'false'"
-      aria-label="Start timer"
-    >
+    <!-- Start layer (for inputting next session's target duration) -->
+    <section :class="['settings-layer', 'start-layer', { 'is-active': isStartLayerOpen && isIdle }]" role="dialog" :aria-hidden="!isIdle" aria-label="Start timer">
       <div class="settings-sheet">
         <header class="settings-header">
-          <div>
-            <p class="settings-kicker">Start timer</p>
-            <h2 class="settings-title">Set this session first</h2>
-          </div>
+          <div><p class="settings-kicker">Start timer</p><h2 class="settings-title">Set this session first</h2></div>
         </header>
-
         <div class="field-grid">
           <label class="field">
             <span>Work time</span>
-            <div class="input-with-unit">
-              <input
-                v-model.number="workDuration"
-                type="number"
-                max="120"
-                step="1"
-              />
-              <span class="input-unit">min</span>
-            </div>
+            <div class="input-with-unit"><input v-model.number="workMinutes" type="number" max="120" step="1" /><span class="input-unit">min</span></div>
           </label>
         </div>
-
-        <p v-if="workDurationMessage" class="field-hint field-hint-error">
-          {{ workDurationMessage }}
-        </p>
-
         <div class="channel-toggles">
-          <label class="channel-toggle">
-            <input
-              type="checkbox"
-              :checked="channelEnabled.saturation"
-              @change="
-                toggleChannel('saturation', {
-                  channel_type: 'saturation',
-                  target_saturation: 0.18,
-                  curve_steepness: 10,
-                  settle_duration_ms: 5000,
-                })
-              "
-            />
-            <span>Saturation</span>
+          <label v-if="hasChannel('saturation')" class="channel-toggle">
+            <input type="checkbox" :checked="channelEnabled.saturation" @change="onToggleChannel('saturation', $event.target.checked)" /><span>Saturation</span>
           </label>
-          <label class="channel-toggle">
-            <input
-              type="checkbox"
-              :checked="channelEnabled.warmth"
-              @change="
-                toggleChannel('warmth', {
-                  channel_type: 'warmth',
-                  target_kelvin: 2500,
-                  curve_steepness: 10,
-                  settle_duration_ms: 5000,
-                })
-              "
-            />
-            <span>Warmth</span>
+          <label v-if="hasChannel('color_temp')" class="channel-toggle">
+            <input type="checkbox" :checked="channelEnabled.color_temp" @change="onToggleChannel('color_temp', $event.target.checked)" /><span>Warmth</span>
           </label>
-          <label class="channel-toggle">
-            <input
-              type="checkbox"
-              :checked="channelEnabled.brightness"
-              @change="
-                toggleChannel('brightness', {
-                  channel_type: 'brightness',
-                  target_brightness: 0.6,
-                  curve_steepness: 8,
-                  settle_duration_ms: 6000,
-                })
-              "
-            />
-            <span>Brightness</span>
+          <label v-if="hasChannel('brightness')" class="channel-toggle">
+            <input type="checkbox" :checked="channelEnabled.brightness" @change="onToggleChannel('brightness', $event.target.checked)" /><span>Brightness</span>
           </label>
         </div>
-
-        <button
-          class="start-button"
-          type="button"
-          @click="handlestartSession"
-        >
-          Start session
-        </button>
+        <button class="start-button" type="button" @click="onStartSession">Start session</button>
       </div>
     </section>
 
     <!-- Settings layer -->
-    <section
-      :class="[
-        'settings-layer',
-        'mode-settings-layer',
-        { 'is-active': isSettingsOpen },
-      ]"
-      role="dialog"
-      :aria-hidden="!isSettingsOpen"
-      :aria-modal="isSettingsOpen ? 'true' : 'false'"
-      aria-label="Channel settings"
-      @click.self="isSettingsOpen = false"
-    >
+    <section :class="['settings-layer', 'mode-settings-layer', { 'is-active': isSettingsOpen }]" role="dialog" :aria-hidden="!isSettingsOpen" aria-label="Channel settings" @click.self="onCloseSettings">
       <div class="settings-sheet settings-page">
         <header class="settings-header">
-          <div>
-            <p class="settings-kicker">Mode settings</p>
-            <h2 class="settings-title">Appearance and cue</h2>
-          </div>
-          <button
-            class="icon-button"
-            type="button"
-            aria-label="Close settings"
-            @click="isSettingsOpen = false"
-          >
-            &times;
-          </button>
+          <div><h1 class="settings-kicker">Mode settings</h1></div>
+          <button class="icon-button" type="button" aria-label="Close settings" @click="onCloseSettings">&times;</button>
         </header>
 
+        <!-- Per-channel config -->
         <div class="channel-settings-list">
-          <div class="channel-setting-card">
-            <label class="field">
-              <input
-                type="checkbox"
-                :checked="channelEnabled.saturation"
-                @change="
-                  toggleChannel('saturation', {
-                    channel_type: 'saturation',
-                    target_saturation: 0.18,
-                    curve_steepness: 10,
-                    settle_duration_ms: 5000,
-                  })
-                "
-              />
-              <strong>Saturation</strong>
-            </label>
-            <p class="channel-description">
-              Gradually desaturates the screen toward grayscale.
-            </p>
-          </div>
+          <template v-for="[type] in channelConfigs" :key="type">
+            <div class="channel-setting-card">
+              <label class="field">
+                <input type="checkbox" :checked="channelEnabled[type]" @change="onToggleChannel(type, $event.target.checked)" />
+                <strong>{{ channelLabel(type) }}</strong>
+              </label>
 
-          <div class="channel-setting-card">
-            <label class="field">
-              <input
-                type="checkbox"
-                :checked="channelEnabled.warmth"
-                @change="
-                  toggleChannel('warmth', {
-                    channel_type: 'warmth',
-                    target_kelvin: 2500,
-                    curve_steepness: 10,
-                    settle_duration_ms: 5000,
-                  })
-                "
-              />
-              <strong>Warmth</strong>
-            </label>
-            <p class="channel-description">
-              Shifts color temperature toward a warm amber tone.
-            </p>
-          </div>
-        </label>
+              <div class="channel-config-controls" v-if="channelEnabled[type]">
+                <!-- Begin ratio -->
+                <label class="field field-compact">
+                  <span>Begin at {{ (getChannelBeginRatio(type) * 100).toFixed(0) }}%</span>
+                  <input type="range" min="0" max="1" step="0.01" :value="getChannelBeginRatio(type)" @input="updateChannelProgressBeginRatio(type, Number($event.target.value))" />
+                </label>
 
+                <!-- Target value (type-specific) -->
+                <template v-if="type === 'saturation'">
+                  <label class="field field-compact">
+                    <span>Target saturation {{ (getChannelTargetValueDisplay(type, findChannelConfig(type)) * 100).toFixed(0) }}%</span>
+                    <input type="range" min="0" max="1" step="0.01" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
+                  </label>
+                </template>
+                <template v-else-if="type === 'color_temp'">
+                  <label class="field field-compact">
+                    <span>Target warmth {{ getChannelTargetValueDisplay(type, findChannelConfig(type)) }} K</span>
+                    <input type="range" min="1000" max="6500" step="100" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
+                  </label>
+                </template>
+                <template v-else-if="type === 'brightness'">
+                  <label class="field field-compact">
+                    <span>Target brightness {{ (getChannelTargetValueDisplay(type, findChannelConfig(type)) * 100).toFixed(0) }}%</span>
+                    <input type="range" min="0" max="1" step="0.01" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
+                  </label>
+                </template>
+
+                <!-- Curve steepness -->
+                <label class="field field-compact">
+                  <span>Steepness {{ getChannelSteepness(type).toFixed(1) }}</span>
+                  <input type="range" min="0.5" max="30" step="0.5" :value="getChannelSteepness(type)" @input="updateChannelCurveParams(type, Number($event.target.value))" />
+                </label>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Preview -->
+        <section class="settings-group">
+          <template v-if="!isPreview">
+            <button class="action-button" type="button" @click="enterPreview">Open preview</button>
+          </template>
+          <template v-else>
+            <div class="settings-group-header"><span class="settings-group-title">Preview ({{ (previewProgress * 100).toFixed(0) }}%)</span></div>
+            <input type="range" min="0" max="1" step="0.01" :value="previewProgress" @input="setPreviewProgress($event.target.value)" />
+            <button class="action-button" type="button" @click="exitPreview">Close preview</button>
+          </template>
+        </section>
+
+        <!-- Preset durations (Save / Cancel) -->
+        <section class="settings-group">
+          <div class="settings-group-header">
+            <span class="settings-group-title">Shortcut durations</span>
+            <div class="settings-group-actions">
+              <button class="ghost-button" type="button" :disabled="!presetDraft.dirty.value" @click="onPresetCancel">Cancel</button>
+              <button class="ghost-button ghost-button-primary" type="button" :disabled="!presetDraft.dirty.value" @click="onPresetSave">Save</button>
+            </div>
+          </div>
+          <div class="field-grid">
+            <label v-for="(d, i) in presetDraft.draft.value" :key="i" class="field field-compact">
+              <span>Preset {{ i + 1 }}</span>
+              <div class="input-with-unit">
+                <input type="number" min="1" max="180" step="1" :value="Math.round(d / 60_000)" @input="onDraftDurationChange(i, $event.target.value)" />
+                <span class="input-unit">min</span>
+              </div>
+            </label>
+          </div>
+          <p v-if="presetSaveError" class="settings-error">{{ presetSaveError }}</p>
+        </section>
+
+        <!-- Shortcut bindings (Save / Cancel) -->
+        <section class="settings-group" v-if="shortcutDraft.draft.value">
+          <div class="settings-group-header">
+            <span class="settings-group-title">Shortcuts</span>
+            <div class="settings-group-actions">
+              <button class="ghost-button" type="button" :disabled="!shortcutDraft.dirty.value" @click="onShortcutCancel">Cancel</button>
+              <button class="ghost-button ghost-button-primary" type="button" :disabled="!shortcutDraft.dirty.value || shortcutHasConflict" @click="onShortcutSave">Save</button>
+            </div>
+          </div>
+          <p v-if="shortcutHasConflict" class="settings-error">{{ conflictBannerText }}</p>
+          <div class="shortcut-list">
+            <div v-for="action in SHORTCUT_ACTIONS" :key="action" class="shortcut-row">
+              <span class="shortcut-label">{{ shortcutLabels[action] }}</span>
+              <KeyBindingInput
+                :model-value="shortcutDraft.draft.value[action]"
+                :invalid="shortcutConflicts.has(action)"
+                @update:model-value="setShortcutBinding(action, $event)"
+              />
+            </div>
+          </div>
+          <p v-if="shortcutSaveError" class="settings-error">{{ shortcutSaveError }}</p>
+        </section>
+
+        <!-- Theme -->
         <section class="settings-group">
           <div class="settings-group-header">
             <span class="settings-group-title">Theme</span>
             <span class="settings-group-meta">{{ themeModeSummary }}</span>
           </div>
-
           <div class="cue-style-list" role="radiogroup" aria-label="Theme mode">
-            <button
-              v-for="option in themeModeOptions"
-              :key="option.id"
-              :class="['cue-style-card', { active: themeMode === option.id }]"
-              type="button"
-              role="radio"
-              :aria-checked="themeMode === option.id"
-              @click="setThemeMode(option.id)"
-            >
-              <strong>{{ option.label }}</strong>
-              <span>{{ option.description }}</span>
+            <button v-for="option in themeModeOptions" :key="option.id" :class="['cue-style-card', { active: themeMode === option.id }]" type="button" role="radio" :aria-checked="themeMode === option.id" @click="setThemeMode(option.id)">
+              <strong>{{ option.label }}</strong><span>{{ option.description }}</span>
             </button>
           </div>
         </section>

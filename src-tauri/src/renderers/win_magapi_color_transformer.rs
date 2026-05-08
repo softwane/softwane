@@ -49,7 +49,6 @@ impl Default for WinMagAPIColorTransformer {
 }
 
 // ── Public API (called by the dispatcher) ────────────────────────────
-
 impl WinMagAPIColorTransformer {
     pub(super) fn render(
         &mut self,

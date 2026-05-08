@@ -390,7 +390,7 @@ button {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 18px 18px 14px;
+  padding: 10px 10px 14px;
   overflow-y: auto;
   background: var(--overlay-strong);
   backdrop-filter: none;
@@ -473,7 +473,7 @@ button {
 
 .settings-header {
   position: sticky;
-  top: 0;
+  top: -16px;
   z-index: 1;
   margin: -16px -16px 0;
   padding: 16px 64px 10px 16px;
@@ -636,7 +636,7 @@ button {
   opacity: 0.88;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 504px) {
   .app-shell,
   .settings-layer {
     padding: 10px;
@@ -653,7 +653,7 @@ button {
   }
 
   .settings-header {
-    margin: -14px -14px 0;
+    margin: -16px -14px 0;
     padding: 14px 58px 10px 14px;
   }
 
@@ -727,4 +727,106 @@ button {
   .timer-app {
     min-height: calc(100vh - 20px);
   }
+}
+
+/* ── Save / Cancel header & error banner ───────────────────────────── */
+
+.settings-group-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ghost-button-primary {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+}
+
+.ghost-button-primary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.ghost-button:disabled,
+.ghost-button-primary:disabled,
+.action-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  pointer-events: none;
+}
+
+.settings-error {
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--field-error) 12%, transparent);
+  color: var(--field-error);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* ── Shortcut list ─────────────────────────────────────────────────── */
+
+.shortcut-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(140px, 1.4fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.shortcut-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* ── Key binding input ─────────────────────────────────────────────── */
+
+.key-binding-input {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  outline: none;
+  cursor: pointer;
+  caret-color: transparent;
+  transition:
+    border-color var(--motion-button-ms) var(--motion-soft),
+    background var(--motion-button-ms) var(--motion-soft);
+}
+
+.key-binding-input:hover {
+  border-color: var(--line-strong);
+}
+
+.key-binding-input:focus,
+.key-binding-input.is-recording {
+  border-color: var(--field-accent);
+  background: var(--surface-raised);
+}
+
+.key-binding-input.is-invalid {
+  border-color: var(--field-error);
+  background: color-mix(in srgb, var(--field-error) 8%, var(--surface));
+}
+
+.key-binding-input::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.key-binding-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

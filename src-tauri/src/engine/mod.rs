@@ -23,7 +23,8 @@ use tauri_plugin_store::Store;
 
 use crate::{
     events::{EngineEvent, ProgressCommand, ProgressPayload, RendererEvent},
-    tray::{update_tray_progress, update_tray_state},
+    state::SharedTimerState,
+    tray::{refresh_tray_menu, update_tray_progress},
 };
 use crate::timer_state_machine::{TimerStateMachine, load_timer_config};
 use crate::channels::{SensoryChannelsSystem, load_channel_config_array};
@@ -51,6 +52,10 @@ pub struct Engine {
     store: Arc<Store<Wry>>,
     event_rx: Receiver<EngineEvent>,
 
+    /// Mirror of `timer.state()` accessible from non-engine threads via
+    /// `app.state::<SharedTimerState>()`.  Updated on every transition.
+    shared_state: SharedTimerState,
+
     progress_channel: Option<tauri::ipc::Channel<ProgressPayload>>,
     last_progress_emit: Instant,
     
@@ -64,10 +69,11 @@ impl Engine {
         event_rx: Receiver<EngineEvent>,
         event_tx: Sender<EngineEvent>,
         store: Arc<Store<Wry>>,
+        shared_state: SharedTimerState,
     ) -> Self {
         let timer = TimerStateMachine::new(load_timer_config(&store));
         let channels = SensoryChannelsSystem::new(load_channel_config_array(&store));
-        let renderers = RendererDispatcher::new(event_tx);
+        let renderers = RendererDispatcher::new(event_tx, channels.switch_states(), &app);
         Self {
             timer,
             channels,
@@ -75,6 +81,7 @@ impl Engine {
             app,
             store,
             event_rx,
+            shared_state,
             progress_channel: None,
             last_progress_emit: Instant::now(),
             last_frame_at: Instant::now(),
@@ -124,7 +131,6 @@ impl Engine {
 
         // Render (side effects)
         if frame_events.switch_changed {
-            tracing::debug!("Switch states: {:?}", self.channels.switch_states());
             self.renderers.switch_renderer(self.channels.switch_states(), &self.app);
         }
         self.renderers.dispatch(logic_frame, &self.app);
@@ -146,10 +152,7 @@ impl Engine {
             match event {
                 EngineEvent::State(command) => frame_events.state_commands.push(command),
                 EngineEvent::Channel(command) => frame_events.channel_commands.push(command),
-                EngineEvent::Renderer(_event) => {
-                    // Renderer events are informational during normal operation;
-                    // they are drained and counted during shutdown (see shutdown).
-                },
+                EngineEvent::Renderer(renderer_event) => log_renderer_event(&renderer_event),
                 EngineEvent::Progress(command) => {
                     let ProgressCommand::RegisterChannel(channel) = command;
                     self.progress_channel = Some(channel);
@@ -186,7 +189,7 @@ impl Engine {
                     acked = true;
                 }
                 Ok(EngineEvent::Renderer(other)) => {
-                    tracing::trace!(?other, "drained during shutdown");
+                    tracing::debug!(?other, "drained during shutdown");
                 }
                 Ok(_) => {
                     // Inbound commands during shutdown are discarded.
@@ -218,6 +221,7 @@ impl Engine {
 
     fn update_frontend_state(&mut self, frame_events: &FrameEvents) {
         let now = Instant::now();
+        
         // Update progress
         if now.duration_since(self.last_progress_emit) >= PROGRESS_EMIT_INTERVAL
             || frame_events.just_transited
@@ -240,7 +244,16 @@ impl Engine {
 
         // Update tray
         if frame_events.just_transited {
-            if let Err(err) = update_tray_state(&self.app, self.timer.state()) {
+            let state = self.timer.state();
+            tracing::debug!("Current state: {:?}", state);
+
+            // Publish to SharedTimerState BEFORE rebuilding the menu so
+            // that any concurrent reader (e.g. a tray refresh triggered
+            // by another command on its own thread) sees the latest
+            // value.
+            self.shared_state.set(state);
+
+            if let Err(err) = refresh_tray_menu(&self.app) {
                 tracing::error!("Failed to update tray state: {err:?}.")
             }
         }
@@ -270,7 +283,7 @@ impl Drop for Engine {
                         acked = true;
                     }
                     Ok(EngineEvent::Renderer(other)) => {
-                        tracing::trace!(?other, "drained during shutdown");
+                        tracing::debug!(?other, "drained during shutdown");
                     }
                     Ok(_) => {
                         // Inbound commands during shutdown are discarded.
@@ -319,5 +332,46 @@ impl std::fmt::Debug for Engine {
          .field("last_frame_at", &self.last_frame_at)
          .field("cleaned_up", &self.cleaned_up)
          .finish()
+    }
+}
+
+/// Translate a [`RendererEvent`] to a tracing record.
+///
+/// Severity choices:
+/// - `RenderSuccessful` / `RenderUnappliedDueToUnchanged`: `debug!`
+///   (high-frequency, suppressed by default in release builds)
+/// - `RenderUnappliedDueToNotStartupped`: `warn!` (renderer is in a bad
+///   transient state; can spam if startup hangs)
+/// - `Startup/RenderFailed`: `error!`
+/// - `StartupSuccessful` / `ShutdownCompleted`: `info!` (low-frequency
+///   lifecycle markers)
+fn log_renderer_event(event: &RendererEvent) {
+    use RendererEvent::*;
+    match event {
+        RenderSuccessful { renderer_name } => {
+            tracing::debug!(target: "renderer", renderer_name, "render successful");
+        }
+        RenderUnappliedDueToUnchanged { renderer_name } => {
+            tracing::debug!(target: "renderer", renderer_name, "render skipped: unchanged");
+        }
+        RenderUnappliedDueToNotStartupped { renderer_name } => {
+            tracing::warn!(target: "renderer", renderer_name, "render skipped: not yet started");
+        }
+        RenderFailed { renderer_name, error } => {
+            tracing::error!(target: "renderer", renderer_name, %error, "render failed");
+        }
+        StartupSuccessful { renderer_name } => {
+            tracing::info!(target: "renderer", renderer_name, "startup successful");
+        }
+        StartupFailed { renderer_name, error } => {
+            tracing::error!(target: "renderer", renderer_name, %error, "startup failed");
+        }
+        ShutdownCompleted { renderer_name } => {
+            tracing::info!(
+                target: "renderer",
+                renderer_name,
+                "shutdown completed (drained outside of normal shutdown path)",
+            );
+        }
     }
 }

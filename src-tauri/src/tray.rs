@@ -10,19 +10,22 @@ use tauri::{
 use crate::{
     engine::EngineHandle,
     events::{
-        EngineEvent, ProgressPayload, StateCommand, WindowCommands, forward_engine_sync, get_preset_session_durations, open_main_window, toggle_main_window_sync
+        EngineEvent, ProgressPayload, StateCommand, WindowCommands,
+        forward_engine_sync, get_preset_session_durations, open_main_window, toggle_main_window_sync,
     },
+    state::SharedTimerState,
     timer_state_machine::TimerState
 };
 
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
-    build_tray(app, "Idle")?;
-    Ok(())
+    let durations = get_preset_session_durations(app.clone());
+    build_tray(app, "Idle", durations)
 }
 
-fn build_tray(app: &AppHandle, phase_label: &str) -> tauri::Result<()> {
-    let menu = build_menu(app, phase_label)?;
+fn build_tray(app: &AppHandle, phase_label: &str, durations: [u64; 3]) -> tauri::Result<()> {
+    let menu = build_menu(app, phase_label, durations)?;
 
+    // Build icon
     let (icon, use_template) = if cfg!(target_os = "macos") {
         let icon_bytes = include_bytes!("../icons/icon-tray-template.png");
         (Image::from_bytes(icon_bytes).unwrap(), true)
@@ -36,39 +39,33 @@ fn build_tray(app: &AppHandle, phase_label: &str) -> tauri::Result<()> {
         return Ok(());
     }
 
-    let mut builder = TrayIconBuilder::with_id("main").icon(icon).menu(&menu);
-
-    if use_template {
-        builder = builder.icon_as_template(true);
-    }
-
-    builder
-        .on_menu_event(move |app, event| {
-            match event.id.as_ref() {
-                "quit" => app.exit(0),
-                other => {
-                    let app_handle = app.clone();
-                    let event = match other {
-                        "open" => {
-                            tauri::async_runtime::spawn(async move {
-                                if let Err(err) = open_main_window(app_handle).await {
-                                    tracing::error!("Failed to open main window from tray: {err:?}.");
-                                }
-                            });
-                            return;
-                        },
-                        "start_preset1" => EngineEvent::State(StateCommand::StartSession{ target_duration_ms: 25 * 60_000 }),
-                        "start_preset2" => EngineEvent::State(StateCommand::StartSession{ target_duration_ms: 50 * 60_000 }),
-                        "start_preset3" => EngineEvent::State(StateCommand::StartSession{ target_duration_ms: 90 * 60_000 }),
-                        "take_break_now" => EngineEvent::State(StateCommand::TakeBreakNow),
-                        "stop" => EngineEvent::State(StateCommand::StopSession),
-                        "force_reset" => EngineEvent::ForceReset,
-                        _ => return,
-                    };
-                    forward_engine_sync(app_handle.state::<EngineHandle>().tx.clone(), event);
-                }
+    TrayIconBuilder::with_id("main")
+        .menu(&menu)
+        .icon(icon)
+        .icon_as_template(use_template)
+        .on_menu_event(move |app, event| { match event.id.as_ref() {
+            "quit" => app.exit(0),
+            "open" => {
+                let app_c = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = open_main_window(app_c).await {
+                        tracing::error!("Failed to open main window from tray: {err:?}.");
+                    }
+                });
+            },
+            other => {
+                let event = match other {
+                    "start_preset1" => EngineEvent::State(StateCommand::StartSession{ target_duration_ms: durations[0] }),
+                    "start_preset2" => EngineEvent::State(StateCommand::StartSession{ target_duration_ms: durations[1] }),
+                    "start_preset3" => EngineEvent::State(StateCommand::StartSession{ target_duration_ms: durations[2] }),
+                    "take_break_now" => EngineEvent::State(StateCommand::TakeBreakNow),
+                    "stop" => EngineEvent::State(StateCommand::StopSession),
+                    "force_reset" => EngineEvent::ForceReset,
+                    _ => return,
+                };
+                forward_engine_sync(app.state::<EngineHandle>().tx.clone(), event);
             }
-        })
+        }})
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -85,8 +82,7 @@ fn build_tray(app: &AppHandle, phase_label: &str) -> tauri::Result<()> {
     Ok(())
 }
 
-fn build_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str) -> Result<Menu<R>, tauri::Error> {
-    let durations = get_preset_session_durations(app.clone());
+fn build_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str, durations: [u64; 3]) -> Result<Menu<R>, tauri::Error> {
     let is_idle = phase_label == "Idle";
     let is_progress = phase_label == "Progress";
     let is_settling = phase_label == "Settling";
@@ -96,9 +92,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str) -> Result<Menu<
 
     let open_win = MenuItem::with_id(app, "open", "Open window", true, None::<&str>)?;
 
-    let start_preset1_label = format!("{} min", durations[0] / 60_000);
-    let start_preset2_label = format!("{} min", durations[1] / 60_000);
-    let start_preset3_label = format!("{} min", durations[2] / 60_000);
+    let start_preset1_label = format!("start a {} min session", durations[0] / 60_000);
+    let start_preset2_label = format!("start a {} min session", durations[1] / 60_000);
+    let start_preset3_label = format!("start a {} min session", durations[2] / 60_000);
 
     let start_preset1 = MenuItem::with_id(app, "start_preset1", start_preset1_label, is_idle, None::<&str>)?;
     let start_preset2 = MenuItem::with_id(app, "start_preset2", start_preset2_label, is_idle, None::<&str>)?;
@@ -135,8 +131,9 @@ pub fn notify_crash(app: &AppHandle) {
     }
 }
 
-pub fn update_tray_progress(app: &AppHandle, _progress: ProgressPayload) -> tauri::Result<()> {
-    let Some(_tray) = app.tray_by_id("main") else {
+// TODO: update the tray title
+pub fn update_tray_progress(app: &AppHandle, progress: ProgressPayload) -> tauri::Result<()> {
+    let Some(tray) = app.tray_by_id("main") else {
         tracing::warn!("Trying to update tray progress but tray is not found.");
         return Ok(());
     };
@@ -144,16 +141,36 @@ pub fn update_tray_progress(app: &AppHandle, _progress: ProgressPayload) -> taur
     Ok(())
 }
 
-pub fn update_tray_state(
+/// Rebuild the tray menu using the most recently published
+/// [`SharedTimerState`].
+///
+/// Use from non-engine threads (Tauri command handlers, etc.) when the
+/// caller does not own the current `TimerState` but still needs to
+/// refresh enable/disable flags after some external mutation
+/// (e.g. updated preset durations).  Falls back to `Idle` when
+/// `SharedTimerState` has not been managed yet.
+pub fn refresh_tray_menu(app: &AppHandle) -> tauri::Result<()> {
+    let state = app
+        .try_state::<SharedTimerState>()
+        .map(|s| s.get())
+        .unwrap_or(TimerState::Idle);
+    let durations = get_preset_session_durations(app.clone());
+
+    refresh_tray_menu_inner(app, state, durations)
+}
+
+/// Inner helper function for rebuilding the tray menu using a caller-supplied `TimerState`.
+fn refresh_tray_menu_inner(
     app: &AppHandle,
     state: TimerState,
+    durations: [u64; 3],
 ) -> tauri::Result<()> {
     let Some(tray) = app.tray_by_id("main") else {
-        tracing::warn!("Trying to update tray state but tray is not found.");
+        tracing::warn!("Trying to refresh tray menu but tray is not found.");
         return Ok(());
     };
 
-    let menu = build_menu(app, state.label())?;
+    let menu = build_menu(app, state.label(), durations)?;
     tray.set_menu(Some(menu))?;
     Ok(())
 }
