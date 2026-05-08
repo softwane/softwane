@@ -154,9 +154,13 @@ impl Engine {
                 EngineEvent::Channel(command) => frame_events.channel_commands.push(command),
                 EngineEvent::Renderer(renderer_event) => log_renderer_event(&renderer_event),
                 EngineEvent::Progress(command) => {
-                    let ProgressCommand::RegisterChannel(channel) = command;
-                    self.progress_channel = Some(channel);
-                    self.last_progress_emit = Instant::now() - PROGRESS_EMIT_INTERVAL;
+                    match command {
+                        ProgressCommand::RegisterChannel(channel) => {
+                            self.progress_channel = Some(channel);
+                            self.last_progress_emit = Instant::now() - PROGRESS_EMIT_INTERVAL;
+                        },
+                        ProgressCommand::ClearChannel => self.progress_channel = None,
+                    }
                 },
                 EngineEvent::ForceReset => frame_events.force_reset = true,
                 EngineEvent::Shutdown => frame_events.shutdown_requested = true,
@@ -230,8 +234,7 @@ impl Engine {
 
             if let Some(ch) = &self.progress_channel {
                 if let Err(e) = ch.send(progress.clone()) {
-                    tracing::info!("Frontend's progress channel lost, discard the channel: {e}.");
-                    self.progress_channel = None;
+                    tracing::warn!("Update progress to the main window failed: {e:?}.");
                 };
             }
 

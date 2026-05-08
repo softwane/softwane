@@ -15,12 +15,12 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter, Manager, RunEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_store::StoreBuilder;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-use crate::events::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS};
+use crate::events::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS, clear_progress_channel};
 use crate::shortcuts::{STORE_KEY_SHORTCUT_BINDINGS, default_shortcut_bindings};
 use crate::tray::notify_crash;
 
@@ -137,6 +137,12 @@ pub fn run() {
             }
 
             Ok(())
+        })
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { .. } if window.label() == "main" => {
+                clear_progress_channel(window.app_handle().state::<EngineHandle>());
+            },
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             events::start_session,
