@@ -41,10 +41,16 @@ pub(super) struct WinMagAPIColorTransformer {
 impl Default for WinMagAPIColorTransformer {
     fn default() -> Self {
         Self {
-            name: "windows-MagnificationAPI-color-transformer",
+            name: "Windows-MagnificationAPI-Color-Transformer",
             cached_matrix: Update::Changed(ColorTransformMatrix::identity()),
             magnification_initialized: Arc::new(AtomicBool::new(false)),
         }
+    }
+}
+
+impl WinMagAPIColorTransformer {
+    pub(super) fn new() -> Self {
+        Self::default()
     }
 }
 

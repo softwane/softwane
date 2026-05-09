@@ -5,12 +5,19 @@
 //! calls its methods every frame.
 
 mod utils;
-mod win_magapi_color_transformer;
 
 #[cfg(target_os = "windows")]
 mod windows;
+#[cfg(target_os = "windows")]
+mod win_magapi_color_transformer;
+
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "macos")]
+mod core_graphics_gamma_tweaker;
+
+#[cfg(test)]
+mod mock;
 
 // ── Platform type alias ──────────────────────────────────────────────
 
@@ -20,19 +27,5 @@ pub type RendererDispatcher = windows::WindowsRendererDispatcher;
 #[cfg(target_os = "macos")]
 pub type RendererDispatcher = macos::MacOSRendererDispatcher;
 
-// TODO: add mock renderer dispatcher for other platforms and tests
-
-#[cfg(test)]
-mod tests {
-    use super::utils::*;
-
-    #[test]
-    fn test_kelvin_to_rgb() {
-        let (r, g, b) = kelvin_to_rgb(6500);
-        assert!((r - 1.0).abs() < 0.001);
-        assert!((g - 1.0).abs() < 0.001);
-        assert!((b - 1.0).abs() < 0.001);
-        let (_, _, b) = kelvin_to_rgb(1900);
-        assert!((b - 0.0).abs() < 0.001);
-    }
-}
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+compile_error!("Erode only supports Windows and macOS");

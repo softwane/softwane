@@ -62,3 +62,18 @@ pub(super) fn kelvin_to_rgb(kelvin: u32) -> RGB {
         (b / b_d65).clamp(0.0, 1.0),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_kelvin_to_rgb() {
+        let (r, g, b) = kelvin_to_rgb(6500);
+        assert!((r - 1.0).abs() < 0.001);
+        assert!((g - 1.0).abs() < 0.001);
+        assert!((b - 1.0).abs() < 0.001);
+        let (_, _, b) = kelvin_to_rgb(1900);
+        assert!((b - 0.0).abs() < 0.001);
+    }
+}

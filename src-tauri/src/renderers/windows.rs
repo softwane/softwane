@@ -27,12 +27,13 @@ impl WindowsRendererDispatcher {
     ) -> Self {
         let mut this = Self {
             tx,
-            color_transformer: WinMagAPIColorTransformer::default(),
+            color_transformer: WinMagAPIColorTransformer::new(),
         };
         this.switch_renderer(states, app);
         this
     }
 
+    // TODO:track color transformer's state, if it doesn't excuted cuz the main thread is stuck, send event
     pub fn dispatch(&mut self, logic_frame: Arc<LogicFrame>, app: &AppHandle) {
         let saturation = logic_frame[ChannelType::Saturation];
         let color_temperature = logic_frame[ChannelType::ColorTemp];
