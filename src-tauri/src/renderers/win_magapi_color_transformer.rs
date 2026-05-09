@@ -168,7 +168,7 @@ impl WinMagAPIColorTransformer {
     fn apply_matrix(&self, app: &AppHandle, tx: Sender<EngineEvent>) {
         let name = self.name;
         let initialized = Arc::clone(&self.magnification_initialized);
-        let matrix_f32 = Self::to_row_major_f32(self.cached_matrix.get_value());
+        let matrix_f32 = self.cached_matrix.get_value().cast().into();
 
         let dispatch = app.run_on_main_thread(move || {
             if !initialized.load(Ordering::Acquire) {
@@ -296,16 +296,6 @@ impl WinMagAPIColorTransformer {
 
         GRAYSCALE * (1.0 - s) + ColorTransformMatrix::identity() * s
     }
-
-    fn to_row_major_f32(m: &ColorTransformMatrix) -> [[f32; 5]; 5] {
-        let mut out = [[0.0f32; 5]; 5];
-        for i in 0..5 {
-            for j in 0..5 {
-                out[i][j] = m[(j, i)] as f32;
-            }
-        }
-        out
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -345,34 +335,6 @@ mod tests {
         }
         assert!((m[(3, 3)] - 1.0).abs() < 1e-10);
         assert!((m[(4, 4)] - 1.0).abs() < 1e-10);
-    }
-
-    #[test]
-    fn to_row_major_f32_transposes_correctly() {
-        let mut m = ColorTransformMatrix::zeros();
-        m[(0, 1)] = 3.0;
-        m[(1, 0)] = 7.0;
-        let out = WinMagAPIColorTransformer::to_row_major_f32(&m);
-        assert!(
-            (out[0][1] - 7.0f32).abs() < 1e-6,
-            "out[0][1] should equal m[(1,0)]=7"
-        );
-        assert!(
-            (out[1][0] - 3.0f32).abs() < 1e-6,
-            "out[1][0] should equal m[(0,1)]=3"
-        );
-    }
-
-    #[test]
-    fn to_row_major_f32_identity_maps_to_identity() {
-        let out =
-            WinMagAPIColorTransformer::to_row_major_f32(&ColorTransformMatrix::identity());
-        for row in 0..5 {
-            for col in 0..5 {
-                let expected = if row == col { 1.0f32 } else { 0.0f32 };
-                assert!((out[row][col] - expected).abs() < 1e-6);
-            }
-        }
     }
 
     #[test]
