@@ -253,15 +253,15 @@ impl WinMagAPIColorTransformer {
 
         let s = match saturation.get_value() {
             ChannelValue::Saturation(s) => *s,
-            _ => unreachable!(),
+            _ => panic!("Invalid ChannelValue when update_cached_matrix. Expect Saturation, but get: {saturation:?}."),
         };
         let ct_kelvin = match color_temperature.get_value() {
             ChannelValue::ColorTempKelvin(t) => *t,
-            _ => unreachable!(),
+            _ => panic!("Invalid ChannelValue when update_cached_matrix. Expect ColorTempKelvin, but get: {color_temperature:?}."),
         };
         let br = match brightness.get_value() {
             ChannelValue::Brightness(b) => *b,
-            _ => unreachable!(),
+            _ => panic!("Invalid ChannelValue when update_cached_matrix. Expect Brightness, but get: {brightness:?}."),
         };
 
         let saturation_matrix = Self::saturation_to_matrix(s);

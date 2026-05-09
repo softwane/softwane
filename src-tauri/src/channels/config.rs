@@ -73,9 +73,10 @@ impl std::ops::Index<TimerState> for StateParamsTable {
             TimerState::Progress { .. } | TimerState::Preview { .. } => &self.0[0],
             TimerState::Settling { .. } => &self.0[1],
             TimerState::Reverse { .. } => &self.0[2],
-            _ => unreachable!(
-                "Invalid timer state for StateParamsTable: {:?}.",
-                index.label()
+            _ => panic!(
+                "Invalid timer state index for StateParamsTable: {:?}. The table is: {:?}.",
+                index.label(),
+                self,
             ),
         }
     }
@@ -87,9 +88,10 @@ impl std::ops::IndexMut<TimerState> for StateParamsTable {
             TimerState::Progress { .. } | TimerState::Preview { .. } => &mut self.0[0],
             TimerState::Settling { .. } => &mut self.0[1],
             TimerState::Reverse { .. } => &mut self.0[2],
-            _ => unreachable!(
-                "Invalid timer state for StateParamsTable: {:?}.",
-                index.label()
+            _ => panic!(
+                "Invalid timer state index for StateParamsTable: {:?}. The table is: {:?}.",
+                index.label(),
+                self,
             ),
         }
     }

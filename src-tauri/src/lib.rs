@@ -12,6 +12,7 @@ use engine::EngineHandle;
 use events::EngineEvent;
 
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -101,6 +102,10 @@ pub fn run() {
                         .expect("system clock went backwards")
                         .as_millis() as u64,
                 });
+
+                tracing::error!("{crash_json}");
+                let _ = std::io::stderr().write_fmt(format_args!("{crash_json}"));
+
                 let _ = store_for_hook.set(
                     STORE_KEY_LAST_CRASH.to_string(),
                     crash_json.clone(),

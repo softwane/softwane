@@ -144,12 +144,11 @@ impl CoreGraphicsGammaTweaker {
 
         let ct_kelvin = match color_temperature.get_value() {
             ChannelValue::ColorTempKelvin(t) => *t,
-            // TODO: change all unreachable! to panic! indicating the panic situation
-            _ => unreachable!(),
+            _ => panic!("Invalid ChannelValue when render. Expect ColorTempKelvin, but get: {color_temperature:?}."),
         };
         let br = match brightness.get_value() {
             ChannelValue::Brightness(b) => *b,
-            _ => unreachable!(),
+            _ => panic!("Invalid ChannelValue when render. Expect Brightness, but get: {brightness:?}."),
         };
 
         // ── 4. Compute per-channel multipliers ────────────────────
