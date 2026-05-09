@@ -10,6 +10,8 @@ use tokio::sync::mpsc::Sender;
 use crate::channels::{ChannelSwitchStates, LogicFrame};
 use crate::events::{EngineEvent, RendererEvent};
 
+// TODO: add test using mock
+
 #[derive(Debug)]
 pub struct MockRendererDispatcher {
     tx: Sender<EngineEvent>,
