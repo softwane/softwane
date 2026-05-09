@@ -171,7 +171,7 @@ const themeModeSummary = computed(() => {
 const canTakeBreak = computed(() => isProgress.value);
 const canStop = computed(() => isProgress.value || isSettling.value || isSabi.value);
 const canStartNewSession = computed(() => isIdle.value);
-const isStartLayerOpen = ref(true);
+const isStartLayerOpen = ref(false);
 
 function hasChannel(type) { return channelConfigs.value.some(([t]) => t === type); }
 function channelLabel(type) { return type === "color_temp" ? "Warmth" : type.charAt(0).toUpperCase() + type.slice(1); }

@@ -12,6 +12,7 @@ pub struct TimerStateMachine {
     state: TimerState,
     pub(super) settling_duration_ms: u64,
     pub(super) reverse_duration_ms: u64,
+    last_preview_progress: f64,
 }
 
 impl TimerStateMachine {
@@ -20,6 +21,7 @@ impl TimerStateMachine {
             state: TimerState::Idle,
             settling_duration_ms: config.settling_duration_ms,
             reverse_duration_ms: config.reverse_duration_ms,
+            last_preview_progress: 0.0,
         }
     }
 
@@ -114,7 +116,7 @@ impl TimerStateMachine {
             StateCommand::EnterPreview => {
                 match self.state {
                     TimerState::Idle => {
-                        self.transit(TimerState::Preview { progress: 0.0 });
+                        self.transit(TimerState::Preview { progress: self.last_preview_progress });
                         *just_transited = true;
                     }
                     _ => {
@@ -127,7 +129,8 @@ impl TimerStateMachine {
             }
             StateCommand::ExitPreview => {
                 match self.state {
-                    TimerState::Preview { .. } => {
+                    TimerState::Preview { progress } => {
+                        self.last_preview_progress = progress;
                         self.transit(TimerState::Idle);
                         *just_transited = true;
                     }
