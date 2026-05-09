@@ -42,7 +42,7 @@ impl ChannelCommand {
             | Self::UpdateSettlingCurveParas { channel_type, .. }
             | Self::UpdateReverseCurveParas { channel_type, .. } => *channel_type,
             Self::UpdateTargetChannelValue { target_channel_value } => {
-                ChannelType::from(*target_channel_value)
+                (*target_channel_value).into()
             }
         }
     }

@@ -413,7 +413,7 @@ pub fn get_shortcut_bindings(
     let store = app.store("config.json")?;
     let raw = store.get(STORE_KEY_SHORTCUT_BINDINGS);
     let bindings = raw
-        .and_then(|v| serde_json::from_value::<ShortcutBindings>(v)
+        .and_then(|v| serde_json::from_value(v)
             .inspect_err(|e| tracing::warn!(
                 "Stored shortcut bindings malformed, using defaults: {e}"
             ))

@@ -83,7 +83,7 @@ pub fn get_preset_session_durations<R: Runtime>(app_handle: AppHandle<R>) -> [u6
         }
     };
     let raw = store.get(STORE_KEY_PRESET_SESSION_DURATIONS);
-    match raw.and_then(|v| serde_json::from_value::<[u64; 3]>(v).ok()) {
+    match raw.and_then(|v| serde_json::from_value(v).ok()) {
         Some(d) => d,
         _ => DEFAULT_DURATIONS,
     }

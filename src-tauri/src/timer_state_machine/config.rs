@@ -31,7 +31,7 @@ impl Default for TimerConfig {
 pub fn load_timer_config(store: &Store<Wry>) -> TimerConfig{
     store
         .get(STORE_KEY_TIMER)
-        .and_then(|v| serde_json::from_value::<TimerConfig>(v).ok())
+        .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default()
 }
 

@@ -120,7 +120,7 @@ pub fn load_channel_config(store: &tauri_plugin_store::Store<tauri::Wry>, channe
         tracing::info!(?channel_type, "no stored config, using default");
         return DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type];
     };
-    serde_json::from_value::<ChannelConfig>(raw).unwrap_or_else(|e| {
+    serde_json::from_value(raw).unwrap_or_else(|e| {
         tracing::warn!(
             ?channel_type, ?e,
             "stored config schema mismatch, using default"
