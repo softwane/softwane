@@ -49,13 +49,13 @@ pub fn run() {
             if cfg!(debug_assertions) {
                 tracing_subscriber::registry()
                     .with(EnvFilter::from_default_env()
-                        .add_directive("erode_app_lib=debug".parse().expect("directive")))
+                    .add_directive("erode_app_lib=debug".parse().expect("directive")))
                     .with(fmt::layer().with_writer(std::io::stderr))
                     .init();
             } else {
                 tracing_subscriber::registry()
                     .with(EnvFilter::from_default_env()
-                        .add_directive("erode_app_lib=info".parse().expect("directive")))
+                    .add_directive("erode_app_lib=info".parse().expect("directive")))
                     .with(fmt::layer().with_writer(non_blocking).json())
                     .init();
             }
