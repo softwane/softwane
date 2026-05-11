@@ -210,6 +210,13 @@ impl CoreGraphicsGammaTweaker {
     /// [`StartupSuccessful`] on success, [`StartupFailed`] if any display
     /// cannot be read.
     pub(super) fn startup(&mut self, _app: &AppHandle, tx: Sender<EngineEvent>) {
+        if self.switch_on {
+            let _ = tx.try_send(EngineEvent::Renderer(
+                RendererEvent::ShutdownCompleted { renderer_name: self.name },
+            ));
+            return;
+        }
+        
         let Ok(ids) = active_display_ids().inspect_err(|e| {
             let _ = tx.try_send(EngineEvent::Renderer(
                 RendererEvent::StartupFailed {
@@ -236,20 +243,24 @@ impl CoreGraphicsGammaTweaker {
         }
 
         self.switch_on = true;
+
+        let _ = tx.try_send(EngineEvent::Renderer(
+            RendererEvent::ShutdownCompleted { renderer_name: self.name },
+        ));
     }
 
 
     /// Restore all displays to their system ColorSync defaults, clear
     /// stored baselines, and emit [`ShutdownCompleted`].
     pub(super) fn shutdown(&mut self, _app: &AppHandle, tx: Sender<EngineEvent>) {
-        self.baseline_tables.clear();
-
         if !self.switch_on {
             let _ = tx.try_send(EngineEvent::Renderer(
                 RendererEvent::ShutdownCompleted { renderer_name: self.name },
             ));
             return;
         }
+
+        self.baseline_tables.clear();
 
         unsafe {
             CGDisplayRestoreColorSyncSettings();
