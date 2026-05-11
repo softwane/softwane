@@ -99,13 +99,15 @@ impl CoreGraphicsGammaTweaker {
 
         // ── 1. Hotplug detection ──────────────────────────────────
         if let Ok(current_ids) = active_display_ids().inspect_err(|e| {
-            let e_msg = format!("hotplug: failed to capture gamma table for new display; skipping: {}", e.to_string());
-            let _ = tx.try_send(EngineEvent::Renderer(
-                RendererEvent::RenderFailed {
-                    renderer_name: self.name,
-                    error: e_msg,
-                },
-            ));
+            // TODO: add semi-seccessful
+            // But it couple system api with engine. Engine should NOT care about whether
+            // there are different rendering results for different displays.
+            // So, maybe move `log_renderer_event` from engine to renderer dispatcher.
+            tracing::warn!(
+                renderer_name = self.name,
+                error = %e,
+                "hotplug: failed to capture active display ids; skipping",
+            );
             // skip updating available displays
         }) {
             // Remove displays that have been disconnected.
