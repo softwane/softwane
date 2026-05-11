@@ -1,3 +1,7 @@
+// TODO: Event should belong to Engine and those sub-system.
+// Commands and command errors should be where? I dunno.
+// Window should be in an independent file.
+
 mod timer_state_commands;
 mod channel_commands;
 mod renderer_events;
