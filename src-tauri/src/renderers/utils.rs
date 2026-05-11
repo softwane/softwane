@@ -15,7 +15,7 @@ pub(super) type RGB = (f64, f64, f64);
 /// peak values just below 255. Dividing by these values normalises every
 /// channel so that 6500 K yields identity scaling (all coefficients = 1).
 /// Valid range: 1000 K – 40000 K. See https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html
-// TODO: update the fitting model, referring to "/refs/Black body temperature.nb".
+// TODO: update the fitting model, referring to "https://github.com/softwane/kelvin-to-rgb-algo/tree/main/refs".
 // It's from https://github.com/rgatkinson/ParticleDmxNeopixel
 pub(super) fn kelvin_to_rgb(kelvin: u32) -> RGB {
     let t = kelvin.clamp(1000, 40000);
