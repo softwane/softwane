@@ -9,12 +9,12 @@ mod utils;
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "windows")]
-mod win_magapi_color_transformer;
+mod win_mag_api_color_transformer;
 
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
-mod core_graphics_gamma_tweaker;
+mod mac_core_graphics_gamma_tweaker;
 
 #[cfg(test)]
 mod mock;

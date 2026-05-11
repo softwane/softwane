@@ -11,7 +11,7 @@ use tokio::sync::mpsc::Sender;
 use crate::channels::{ChannelSwitchStates, ChannelType, LogicFrame};
 use crate::events::EngineEvent;
 
-use super::win_magapi_color_transformer::WinMagAPIColorTransformer;
+use super::win_mag_api_color_transformer::WinMagAPIColorTransformer;
 
 #[derive(Debug)]
 pub struct WindowsRendererDispatcher {

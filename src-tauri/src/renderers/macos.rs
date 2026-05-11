@@ -13,7 +13,7 @@ use tokio::sync::mpsc::Sender;
 use crate::channels::{ChannelSwitchStates, ChannelType, LogicFrame};
 use crate::events::EngineEvent;
 
-use super::core_graphics_gamma_tweaker::CoreGraphicsGammaTweaker;
+use super::mac_core_graphics_gamma_tweaker::CoreGraphicsGammaTweaker;
 
 #[derive(Debug)]
 pub struct MacOSRendererDispatcher {
