@@ -1,17 +1,17 @@
-# Erode App Spec And Todo
+# Softwane Spec And Todo
 
 ## 1. Product Definition
 
 ### 1.1 Working Name
 
-- Public name: `Erode App`
+- Public name: `Softwane`
 - Internal concept label: `Erosion Mode`
 
 ### 1.2 Problem Statement
 
 Most break reminder tools rely on popups, alarms, vibration, or aggressive overlays. They may force attention, but they also break deep focus and can feel harsh for sensitive users.
 
-Erode App reframes a reminder from a discrete event into a progressive state. Instead of demanding attention, it gradually changes the visual environment of the screen so the user notices through peripheral vision that time is running out and a rest boundary is approaching.
+Softwane reframes a reminder from a discrete event into a progressive state. Instead of demanding attention, it gradually changes the visual environment of the screen so the user notices through peripheral vision that time is running out and a rest boundary is approaching.
 
 ### 1.3 Design Philosophy
 
@@ -20,7 +20,7 @@ Erode App reframes a reminder from a discrete event into a progressive state. In
 - Use gradual visual degradation instead of sudden sensory spikes
 - Treat `gentleness` as a first-class interaction rule, not just a visual style
 - Make every state change feel like a fade or drift, never a snap or pop
-- Erode does not manage the user's break lifecycle; it only makes "it is time to leave the screen" perceptible
+- Softwane does not manage the user's break lifecycle; it only makes "it is time to leave the screen" perceptible
 - The intended loop is: `the visual cue becomes noticeable -> the user leaves -> the user later returns and manually resets`
 
 ### 1.4 Goals
@@ -57,7 +57,7 @@ Erode App reframes a reminder from a discrete event into a progressive state. In
 - `Controllable`: the user must be able to pause, end the work phase early into rest, or reset
 - `Low presence`: the product should live mostly in the tray/menu bar, not in the workflow
 - `Gentle everywhere`: dialogs, overlays, control responses, and resets must enter and leave softly; no abrupt UI jumps are acceptable
-- `User-led rest`: Erode signals when to leave; it does not orchestrate recovery or detect when the user is ready to return
+- `User-led rest`: Softwane signals when to leave; it does not orchestrate recovery or detect when the user is ready to return
 
 ### 1.9 User Stories
 

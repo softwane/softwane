@@ -1,19 +1,19 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="erode-bg" x1="86" y1="58" x2="416" y2="452" gradientUnits="userSpaceOnUse">
+    <linearGradient id="softwane-bg" x1="86" y1="58" x2="416" y2="452" gradientUnits="userSpaceOnUse">
       <stop stop-color="#F7F0E1"/>
       <stop offset="0.42" stop-color="#D9C29B"/>
       <stop offset="1" stop-color="#7B5327"/>
     </linearGradient>
-    <linearGradient id="erode-stone" x1="150" y1="112" x2="362" y2="388" gradientUnits="userSpaceOnUse">
+    <linearGradient id="softwane-stone" x1="150" y1="112" x2="362" y2="388" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFF9F0"/>
       <stop offset="1" stop-color="#E8D7BC"/>
     </linearGradient>
-    <radialGradient id="erode-haze" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(170 136) rotate(41.3478) scale(269.849)">
+    <radialGradient id="softwane-haze" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(170 136) rotate(41.3478) scale(269.849)">
       <stop stop-color="white" stop-opacity="0.9"/>
       <stop offset="1" stop-color="white" stop-opacity="0"/>
     </radialGradient>
-    <filter id="erode-shadow" x="63" y="58" width="386" height="396" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+    <filter id="softwane-shadow" x="63" y="58" width="386" height="396" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feFlood flood-opacity="0" result="BackgroundImageFix"/>
       <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
       <feOffset dy="24"/>
@@ -24,11 +24,11 @@
     </filter>
   </defs>
   <g transform="translate(43 43) scale(0.83203125)">
-    <rect width="512" height="512" rx="132" fill="url(#erode-bg)"/>
-    <rect width="512" height="512" rx="132" fill="url(#erode-haze)"/>
+    <rect width="512" height="512" rx="132" fill="url(#softwane-bg)"/>
+    <rect width="512" height="512" rx="132" fill="url(#softwane-haze)"/>
     <path d="M70 398C135 359 211 339 289 342C350 345 405 364 442 391" stroke="#FFF7EA" stroke-opacity="0.32" stroke-width="18" stroke-linecap="round"/>
-    <g filter="url(#erode-shadow)">
-      <path fill-rule="evenodd" clip-rule="evenodd" d="M149 108C149 92.536 161.536 80 177 80H349C364.464 80 377 92.536 377 108V143C377 158.464 364.464 171 349 171H239V217H313C328.464 217 341 229.536 341 245V273C341 288.464 328.464 301 313 301H239V341H349C364.464 341 377 353.536 377 369V404C377 419.464 364.464 432 349 432H177C161.536 432 149 419.464 149 404V108ZM282 164C270.954 164 262 172.954 262 184C262 195.046 270.954 204 282 204H351C362.046 204 371 195.046 371 184C371 172.954 362.046 164 351 164H282ZM322 296C309.297 296 299 306.297 299 319C299 331.703 309.297 342 322 342H377C389.703 342 400 331.703 400 319C400 306.297 389.703 296 377 296H322ZM278 236C267.507 236 259 244.507 259 255C259 265.493 267.507 274 278 274H336C346.493 274 355 265.493 355 255C355 244.507 346.493 236 336 236H278Z" fill="url(#erode-stone)"/>
+    <g filter="url(#softwane-shadow)">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M149 108C149 92.536 161.536 80 177 80H349C364.464 80 377 92.536 377 108V143C377 158.464 364.464 171 349 171H239V217H313C328.464 217 341 229.536 341 245V273C341 288.464 328.464 301 313 301H239V341H349C364.464 341 377 353.536 377 369V404C377 419.464 364.464 432 349 432H177C161.536 432 149 419.464 149 404V108ZM282 164C270.954 164 262 172.954 262 184C262 195.046 270.954 204 282 204H351C362.046 204 371 195.046 371 184C371 172.954 362.046 164 351 164H282ZM322 296C309.297 296 299 306.297 299 319C299 331.703 309.297 342 322 342H377C389.703 342 400 331.703 400 319C400 306.297 389.703 296 377 296H322ZM278 236C267.507 236 259 244.507 259 255C259 265.493 267.507 274 278 274H336C346.493 274 355 265.493 355 255C355 244.507 346.493 236 336 236H278Z" fill="url(#softwane-stone)"/>
       <path d="M236 128C245.61 110.314 265.409 98 287.5 98H353" stroke="white" stroke-opacity="0.5" stroke-width="16" stroke-linecap="round"/>
     </g>
     <circle cx="366" cy="186" r="18" fill="#B68752" fill-opacity="0.35"/>

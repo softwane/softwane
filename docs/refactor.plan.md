@@ -1319,7 +1319,7 @@ std::panic::set_hook(Box::new(move |info| {
     
     // tray 标题改为告警态（不弹窗）
     if let Some(tray) = app_for_hook.tray_by_id("main") {
-        let _ = tray.set_title(Some("⚠ Erode (recovering)"));
+        let _ = tray.set_title(Some("⚠ softwane (recovering)"));
     }
 }));
 ```
@@ -1374,7 +1374,7 @@ let log_dir = app.path().app_log_dir()
     .or_else(|_| app.path().app_local_data_dir())?;
 std::fs::create_dir_all(&log_dir)?;
 
-let file_appender = tracing_appender::rolling::daily(&log_dir, "erode.log");
+let file_appender = tracing_appender::rolling::daily(&log_dir, "softwane.log");
 let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
 tracing_subscriber::registry()
@@ -1472,7 +1472,7 @@ pub enum EngineEvent {
 panic 发生时（panic hook）:
   1. store.set("system.last_crash", { timestamp, message, thread })
   2. store.save() 同步阻塞
-  3. tray.set_title("⚠ Erode (recovering)")
+  3. tray.set_title("⚠ softwane (recovering)")
   4. （v1）tray icon 切换为告警态图标
 
 下次启动时（lib.rs::setup）:

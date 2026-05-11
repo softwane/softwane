@@ -28,4 +28,4 @@ pub type RendererDispatcher = windows::WindowsRendererDispatcher;
 pub type RendererDispatcher = macos::MacOSRendererDispatcher;
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-compile_error!("Erode only supports Windows and macOS");
+compile_error!("softwane only supports Windows and macOS");

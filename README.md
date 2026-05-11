@@ -1,10 +1,10 @@
-# Erode App
+# Softwane
 
-Erode App is a non-intrusive rest reminder system based on progressive visual erosion. Instead of interrupting the user with popups, sounds, or modal overlays, it gradually reduces screen saturation, shifts the display toward a warmer color temperature, and approaches grayscale as a work session nears its end.
+Softwane is a non-intrusive rest reminder system based on progressive visual erosion. Instead of interrupting the user with popups, sounds, or modal overlays, it gradually reduces screen saturation, shifts the display toward a warmer color temperature, and approaches grayscale as a work session nears its end.
 
 The goal is simple: make "it is time to take a break" feel like an ambient environmental change rather than a forced interruption.
 
-The intended loop is also simple: the user notices the screen has visibly drifted, leaves to rest, and later comes back to press `Reset`. Erode does not try to manage the whole break lifecycle; it focuses on making the boundary perceptible.
+The intended loop is also simple: the user notices the screen has visibly drifted, leaves to rest, and later comes back to press `Reset`. softwane does not try to manage the whole break lifecycle; it focuses on making the boundary perceptible.
 
 ## Repository Scope
 
@@ -16,7 +16,7 @@ This repository currently contains:
 
 ## Product Philosophy
 
-- Erode is an ambient cue, not a break workflow manager
+- Softwane is an ambient cue, not a break workflow manager
 - The product's job is to make "it is time to leave the screen" perceptible without a popup
 - The core path is: `color shift becomes noticeable -> user leaves -> user returns later and presses Reset`
 - Because of that, the current product direction does not include a separate `Recovery` state
@@ -168,13 +168,13 @@ Local observability events are written as JSON Lines to `observability.jsonl`.
 
 Path details for this project:
 
-- Bundle identifier: `com.erode.app`
+- Bundle identifier: `com.softwane.app`
 - Log filename: `observability.jsonl`
 
 Default log locations:
 
-- macOS: `~/Library/Logs/com.erode.app/observability.jsonl`
-- Windows: `%LOCALAPPDATA%\\com.erode.app\\logs\\observability.jsonl`
+- macOS: `~/Library/Logs/com.softwane.app/observability.jsonl`
+- Windows: `%LOCALAPPDATA%\\com.softwane.app\\logs\\observability.jsonl`
 
 The backend resolves the path through Tauri's app log directory first and falls back to the app local data directory only if the log directory cannot be resolved.
 

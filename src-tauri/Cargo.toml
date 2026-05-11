@@ -1,5 +1,5 @@
 [package]
-name = "erode-app"
+name = "softwane"
 version = "0.1.0"
 description = "Ambient progressive rest reminder desktop app"
 authors = ["r"]
@@ -7,7 +7,7 @@ edition = "2021"
 rust-version = "1.89"
 
 [lib]
-name = "erode_app_lib"
+name = "softwane_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

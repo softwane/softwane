@@ -761,28 +761,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "erode-app"
-version = "0.1.0"
-dependencies = [
- "mimalloc",
- "nalgebra",
- "serde",
- "serde_json",
- "spin_sleep",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-store",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3527,6 +3505,28 @@ dependencies = [
  "tracing",
  "wasm-bindgen",
  "web-sys",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "softwane"
+version = "0.1.0"
+dependencies = [
+ "mimalloc",
+ "nalgebra",
+ "serde",
+ "serde_json",
+ "spin_sleep",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-store",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "windows-sys 0.61.2",
 ]
 

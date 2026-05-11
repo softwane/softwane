@@ -6,5 +6,5 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
-    erode_app_lib::run();
+    softwane_lib::run();
 }

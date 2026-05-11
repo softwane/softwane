@@ -1,7 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
-const STORAGE_KEY = "erode.appearance";
+const STORAGE_KEY = "softwane.appearance";
 const DEFAULT_THEME_MODE = "auto";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 

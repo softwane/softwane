@@ -44,19 +44,19 @@ pub fn run() {
                 .or_else(|_| app.path().app_local_data_dir())?;
             std::fs::create_dir_all(&log_dir)?;
 
-            let file_appender = tracing_appender::rolling::daily(&log_dir, "erode.log");
+            let file_appender = tracing_appender::rolling::daily(&log_dir, "softwane.log");
             let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
             if cfg!(debug_assertions) {
                 tracing_subscriber::registry()
                     .with(EnvFilter::from_default_env()
-                    .add_directive("erode_app_lib=debug".parse().expect("directive")))
+                    .add_directive("softwane_lib=debug".parse().expect("directive")))
                     .with(fmt::layer().with_writer(std::io::stderr))
                     .init();
             } else {
                 tracing_subscriber::registry()
                     .with(EnvFilter::from_default_env()
-                    .add_directive("erode_app_lib=info".parse().expect("directive")))
+                    .add_directive("softwane_lib=info".parse().expect("directive")))
                     .with(fmt::layer().with_writer(non_blocking).json())
                     .init();
             }
@@ -177,7 +177,7 @@ pub fn run() {
             shortcuts::update_shortcut_bindings,
         ])
         .build(tauri::generate_context!())
-        .expect("failed to build Erode App");
+        .expect("failed to build softwane");
 
     app.run(|app_handle, event| match event {
         RunEvent::ExitRequested { api, code,.. } => {

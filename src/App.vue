@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import erodeMark from "./assets/erode-mark.svg";
+import softwaneMark from "./assets/softwane-mark.svg";
 import { useAppearance } from "./composables/useAppearance";
 import { useDraft } from "./composables/useDraft";
 import KeyBindingInput from "./components/KeyBindingInput.vue";
@@ -316,7 +316,7 @@ onMounted(() => { init(); });
   <main class="app-shell">
     <section class="timer-app">
       <header class="topbar">
-        <img class="brand-mark" :src="erodeMark" alt="Erode" />
+        <img class="brand-mark" :src="softwaneMark" alt="softwane" />
         <button class="ghost-button ghost-button-utility" type="button" @click="onOpenSettings">Tune</button>
       </header>
 
