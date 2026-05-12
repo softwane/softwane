@@ -86,7 +86,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str, durations: [u64
     let is_idle = phase_label == "Idle";
     let is_progress = phase_label == "Progress";
     let is_settling = phase_label == "Settling";
-    let is_sabi = phase_label == "Sabi";
+    let is_rest = phase_label == "Rest";
 
     let seperator = PredefinedMenuItem::separator(app)?;
 
@@ -100,7 +100,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str, durations: [u64
     let start_preset2 = MenuItem::with_id(app, "start_preset2", start_preset2_label, is_idle, None::<&str>)?;
     let start_preset3 = MenuItem::with_id(app, "start_preset3", start_preset3_label, is_idle, None::<&str>)?;
     let take_break = MenuItem::with_id(app, "take_break_now", "Take a break now", is_progress, None::<&str>)?;
-    let stop = MenuItem::with_id(app, "stop", "Stop", is_progress || is_settling || is_sabi, None::<&str>)?;
+    let stop = MenuItem::with_id(app, "stop", "Stop", is_progress || is_settling || is_rest, None::<&str>)?;
     
     let reset = MenuItem::with_id(app, "force_reset", "Force reset", true, None::<&str>)?;
     

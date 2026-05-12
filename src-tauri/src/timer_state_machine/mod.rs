@@ -80,7 +80,7 @@ impl TimerStateMachine {
                 match self.state {
                     TimerState::Progress { .. }
                     | TimerState::Settling { .. }
-                    | TimerState::Sabi => {
+                    | TimerState::Rest => {
                         self.transit(TimerState::Reverse {
                             elapsed_ms: 0,
                             target_duration_ms: self.reverse_duration_ms,
@@ -89,7 +89,7 @@ impl TimerStateMachine {
                     }
                     _ => {
                         tracing::warn!(
-                            "[TimerStateMachine] ignoring StopSession: expected Progress/Settling/Sabi, got {}",
+                            "[TimerStateMachine] ignoring StopSession: expected Progress/Settling/Rest, got {}",
                             self.state.label()
                         );
                     }
@@ -186,11 +186,11 @@ impl TimerStateMachine {
             return;
         }
         match self.state {
-            TimerState::Idle | TimerState::Sabi => { /* quiescent */ }
+            TimerState::Idle | TimerState::Rest => { /* quiescent */ }
             TimerState::Preview { .. } => { /* driven by frontend slider */ }
             TimerState::Progress { elapsed_ms, target_duration_ms } => {
                 if elapsed_ms + dt_ms >= target_duration_ms {
-                    self.transit(TimerState::Sabi);
+                    self.transit(TimerState::Rest);
                     frame_events.just_transited = true;
                 } else {
                     self.transit(TimerState::Progress {
@@ -201,7 +201,7 @@ impl TimerStateMachine {
             }
             TimerState::Settling { elapsed_ms, target_duration_ms } => {
                 if elapsed_ms + dt_ms >= target_duration_ms {
-                    self.transit(TimerState::Sabi);
+                    self.transit(TimerState::Rest);
                     frame_events.just_transited = true;
                 } else {
                     self.transit(TimerState::Settling {
@@ -303,7 +303,7 @@ mod tests {
         t.handle_commands(&mut fe);
         t.tick(0, &mut fe);
         t.tick(150, &mut empty_fe());
-        assert_eq!(t.state(), TimerState::Sabi);
+        assert_eq!(t.state(), TimerState::Rest);
         let mut fe = empty_fe();
         fe.state_commands.push(StateCommand::StopSession);
         t.handle_commands(&mut fe);
@@ -365,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn idle_to_progress_to_sabi_to_reverse_to_idle() {
+    fn idle_to_progress_to_rest_to_reverse_to_idle() {
         let mut t = TimerStateMachine::new(config());
 
         // Start
@@ -375,10 +375,10 @@ mod tests {
         t.tick(0, &mut fe);
         assert!(matches!(t.state(), TimerState::Progress { .. }));
 
-        // Advance past duration → Sabi
+        // Advance past duration -> Rest
         let mut fe = empty_fe();
         t.tick(150, &mut fe);
-        assert_eq!(t.state(), TimerState::Sabi);
+        assert_eq!(t.state(), TimerState::Rest);
 
         // Stop → Reverse
         let mut fe = empty_fe();
@@ -394,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn progress_take_break_now_to_settling_to_sabi() {
+    fn progress_take_break_now_to_settling_to_rest() {
         let mut t = TimerStateMachine::new(config());
 
         // Start
@@ -411,10 +411,10 @@ mod tests {
         t.tick(0, &mut fe);
         assert!(matches!(t.state(), TimerState::Settling { .. }));
 
-        // Advance to end of settling → Sabi
+        // Advance to end of settling -> Rest
         let mut fe = empty_fe();
         t.tick(6000, &mut fe);
-        assert_eq!(t.state(), TimerState::Sabi);
+        assert_eq!(t.state(), TimerState::Rest);
     }
 
     #[test]

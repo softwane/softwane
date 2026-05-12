@@ -10,7 +10,7 @@ pub enum TimerState {
     Preview { progress: f64 },
     Progress { elapsed_ms: u64, target_duration_ms: u64 },
     Settling { elapsed_ms: u64, target_duration_ms: u64 },
-    Sabi,
+    Rest,
     Reverse { elapsed_ms: u64, target_duration_ms: u64 },
 }
 
@@ -20,7 +20,7 @@ impl TimerState {
             Self::Progress { elapsed_ms, .. }
             | Self::Settling { elapsed_ms, .. }
             | Self::Reverse { elapsed_ms, .. } => *elapsed_ms,
-            Self::Idle | Self::Sabi | Self::Preview { .. } => 0,
+            Self::Idle | Self::Rest | Self::Preview { .. } => 0,
         }
     }
 
@@ -29,7 +29,7 @@ impl TimerState {
             Self::Progress { target_duration_ms, .. }
             | Self::Settling { target_duration_ms, .. }
             | Self::Reverse { target_duration_ms, .. } => *target_duration_ms,
-            Self::Idle | Self::Sabi | Self::Preview { .. } => u64::MAX,
+            Self::Idle | Self::Rest | Self::Preview { .. } => u64::MAX,
         }
     }
 
@@ -39,7 +39,7 @@ impl TimerState {
             Self::Preview { .. } => "Preview",
             Self::Progress { .. } => "Progress",
             Self::Settling { .. } => "Settling",
-            Self::Sabi => "Sabi",
+            Self::Rest => "Rest",
             Self::Reverse { .. } => "Reverse",
         }
     }
@@ -49,5 +49,5 @@ pub const IDLE_STATE: TimerState = TimerState::Idle;
 pub const PREVIEW_STATE: TimerState = TimerState::Preview { progress: 0.0 };
 pub const PROGRESS_STATE: TimerState = TimerState::Progress { elapsed_ms: 0, target_duration_ms: 0 };
 pub const SETTLING_STATE: TimerState = TimerState::Settling { elapsed_ms: 0, target_duration_ms: 0 };
-pub const SABI_STATE: TimerState = TimerState::Sabi;
+pub const REST_STATE: TimerState = TimerState::Rest;
 pub const REVERSE_STATE: TimerState = TimerState::Reverse { elapsed_ms: 0, target_duration_ms: 0 };

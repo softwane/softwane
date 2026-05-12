@@ -43,7 +43,7 @@ export type TimerStateSnapshot =
   | { state: "preview"; progress: number }
   | { state: "progress"; elapsed_ms: number; target_duration_ms: number }
   | { state: "settling"; elapsed_ms: number; target_duration_ms: number }
-  | { state: "sabi" }
+  | { state: "rest" }
   | { state: "reverse"; elapsed_ms: number; target_duration_ms: number };
 
 // ── 前端状态推送（Channel<ProgressPayload> 负载）

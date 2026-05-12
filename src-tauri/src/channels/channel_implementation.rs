@@ -104,7 +104,7 @@ impl SensoryChannel {
         } else {
             match state {
                 TimerState::Idle => self.channel_type.neutral_value(),
-                TimerState::Sabi => {
+                TimerState::Rest => {
                     self.state_params_table[SETTLING_STATE].target_value
                 }
                 TimerState::Preview { progress } => {

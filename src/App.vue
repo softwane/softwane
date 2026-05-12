@@ -89,7 +89,7 @@ const currentPhase = computed(() => timerState.value?.state ?? "idle");
 const isIdle = computed(() => currentPhase.value === "idle");
 const isProgress = computed(() => currentPhase.value === "progress");
 const isSettling = computed(() => currentPhase.value === "settling");
-const isSabi = computed(() => currentPhase.value === "sabi");
+const isRest = computed(() => currentPhase.value === "rest");
 const isReverse = computed(() => currentPhase.value === "reverse");
 const isPreview = computed(() => currentPhase.value === "preview");
 const hasActiveSession = computed(() => !isIdle.value && !isPreview.value);
@@ -152,7 +152,7 @@ const phaseTone = computed(() => {
   switch (currentPhase.value) {
     case "progress": return "phase-forward";
     case "settling": return "phase-settling";
-    case "sabi": return "phase-sabi";
+    case "rest": return "phase-rest";
     case "reverse": return "phase-reverse";
     default: return "phase-idle";
   }
@@ -164,7 +164,7 @@ const progressStyle = computed(() => ({ transform: `scaleX(${progressValue.value
 const secondaryStatusLine = computed(() => {
   if (isSettling.value) return "Settling into rest";
   if (isReverse.value) return "Recovering to neutral";
-  if (isSabi.value) return "Press hotkey to return";
+  if (isRest.value) return "Press hotkey to return";
   return "";
 });
 
@@ -175,7 +175,7 @@ const themeModeSummary = computed(() => {
 });
 
 const canTakeBreak = computed(() => isProgress.value);
-const canStop = computed(() => isProgress.value || isSettling.value || isSabi.value);
+const canStop = computed(() => isProgress.value || isSettling.value || isRest.value);
 const canStartNewSession = computed(() => isIdle.value);
 const isStartLayerOpen = ref(false);
 const isMacOS = detectMacOS();
