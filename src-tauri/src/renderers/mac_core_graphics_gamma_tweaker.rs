@@ -13,17 +13,10 @@
 //! | `render`   | 1) Detect display hotplug (remove gone, add new).   |
 //! |            | 2) When `ct`/`br` unchanged → emit `Unchanged` + skip. |
 //! |            | 3) Compute per-channel multipliers from kelvin→RGB ×
-//! |            |    brightness and apply to every baseline table entry. |
+//! |            |    brightness and apply them to every baseline table entry. |
 //! |            | 4) Write transformed tables via `CGSetDisplayTransferByTable`. |
 //! | `shutdown` | Restore all displays via `CGDisplayRestoreColorSyncSettings`,|
 //! |            | drop baselines, emit `ShutdownCompleted`.            |
-//!
-//! ## Why no saturation channel
-//!
-//! Gamma tables are per-channel LUTs — they cannot mix channels the way
-//! Windows' 5×5 color matrix does.  macOS does not support saturation
-//! through this API.  The dispatcher discards the saturation value and
-//! emits a TODO noting a possible future accessibility-API path.
 
 use std::collections::HashMap;
 
@@ -77,9 +70,6 @@ impl CoreGraphicsGammaTweaker {
 
 impl CoreGraphicsGammaTweaker {
     /// Compute and apply transformed gamma tables.
-    ///
-    /// Does **not** receive saturation — the dispatcher discards it because
-    /// gamma tables cannot de-saturate across channels on macOS.
     pub(super) fn render(
         &mut self,
         color_temperature: Update<ChannelValue>,

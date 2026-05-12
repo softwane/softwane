@@ -30,6 +30,11 @@ struct LogGuard(tracing_appender::non_blocking::WorkerGuard);
 
 static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn softwane_macos_colorsync_reset_saturation() -> bool;
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -194,6 +199,10 @@ pub fn run() {
             }
         }
         RunEvent::Exit => {
+            #[cfg(target_os = "macos")]
+            unsafe {
+                softwane_macos_colorsync_reset_saturation();
+            }
             // FIXME: Sometimes (cmd+Q, quiting from menu, and quiting from dock) tauri program exits
             // without emitting `RunEvent::ExitRequested` and emits `RunEvent::Exit` directly on macOS.
             // See: https://github.com/tauri-apps/tauri/issues/9198.

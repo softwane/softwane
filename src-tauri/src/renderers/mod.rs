@@ -14,6 +14,8 @@ mod win_mag_api_color_transformer;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
+mod mac_colorsync_saturation_filter;
+#[cfg(target_os = "macos")]
 mod mac_core_graphics_gamma_tweaker;
 
 #[cfg(test)]

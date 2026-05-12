@@ -29,12 +29,10 @@ impl ChannelType {
     /// The frontend calls this once at startup to decide which settings
     /// panels to render.
     ///
-    /// macOS does not support Saturation currently (the gamma table cannot
-    /// de-saturate across channels).
     pub const fn is_available_on_this_platform(&self) -> bool {
         #[cfg(target_os = "macos")]
         {
-            !matches!(self, ChannelType::Saturation)
+            true
         }
         #[cfg(target_os = "windows")]
         {

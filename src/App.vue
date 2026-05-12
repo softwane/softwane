@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import softwaneMark from "./assets/softwane-mark.svg";
 import { useAppearance } from "./composables/useAppearance";
 import { useDraft } from "./composables/useDraft";
@@ -75,6 +75,12 @@ function onChannelTargetChange(type, value) {
   if (type === "saturation") updateChannelTargetValue(type, { saturation: num });
   else if (type === "color_temp") updateChannelTargetValue(type, { color_temp_kelvin: Math.round(num) });
   else if (type === "brightness") updateChannelTargetValue(type, { brightness: num });
+}
+
+function detectMacOS() {
+  if (typeof navigator === "undefined") return false;
+  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  return /mac/i.test(platform);
 }
 
 // ── Derived from state ────────────────────────────────────────────────
@@ -172,9 +178,22 @@ const canTakeBreak = computed(() => isProgress.value);
 const canStop = computed(() => isProgress.value || isSettling.value || isSabi.value);
 const canStartNewSession = computed(() => isIdle.value);
 const isStartLayerOpen = ref(false);
+const isMacOS = detectMacOS();
+const channelConflictLog = ref("");
+let channelConflictLogTimer = 0;
 
 function hasChannel(type) { return channelConfigs.value.some(([t]) => t === type); }
 function channelLabel(type) { return type === "color_temp" ? "Warmth" : type.charAt(0).toUpperCase() + type.slice(1); }
+
+function showChannelConflictLog(disabledTypes) {
+  if (!disabledTypes.length) return;
+  const disabledLabels = disabledTypes.map(channelLabel).join(" and ");
+  channelConflictLog.value = `macOS: turned off ${disabledLabels} because Saturation is exclusive.`;
+  window.clearTimeout(channelConflictLogTimer);
+  channelConflictLogTimer = window.setTimeout(() => {
+    channelConflictLog.value = "";
+  }, 2600);
+}
 
 function openStartLayer() {
   isStartLayerOpen.value = true;
@@ -186,7 +205,28 @@ function onStartSession() {
   isStartLayerOpen.value = false;
 }
 
-function onToggleChannel(type, checked) { toggleChannel(type, checked); }
+function onToggleChannel(type, checked) {
+  const disabledTypes = [];
+  if (isMacOS && checked) {
+    if (type === "saturation") {
+      if (channelEnabled.value.color_temp) {
+        toggleChannel("color_temp", false);
+        disabledTypes.push("color_temp");
+      }
+      if (channelEnabled.value.brightness) {
+        toggleChannel("brightness", false);
+        disabledTypes.push("brightness");
+      }
+    } else if (type === "color_temp" || type === "brightness") {
+      if (channelEnabled.value.saturation) {
+        toggleChannel("saturation", false);
+        disabledTypes.push("saturation");
+      }
+    }
+  }
+  toggleChannel(type, checked);
+  showChannelConflictLog(disabledTypes);
+}
 
 async function onOpenSettings() {
   await refreshConfig();
@@ -310,6 +350,7 @@ function onShortcutCancel() {
 // ── Lifecycle ─────────────────────────────────────────────────────────
 
 onMounted(() => { init(); });
+onUnmounted(() => { window.clearTimeout(channelConflictLogTimer); });
 </script>
 
 <template>
@@ -397,7 +438,7 @@ onMounted(() => { init(); });
                 <template v-if="type === 'saturation'">
                   <label class="field field-compact">
                     <span>Target saturation {{ (getChannelTargetValueDisplay(type, findChannelConfig(type)) * 100).toFixed(0) }}%</span>
-                    <input type="range" min="0" max="1" step="0.01" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
+                    <input type="range" min="0.2" max="1" step="0.01" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
                   </label>
                 </template>
                 <template v-else-if="type === 'color_temp'">
@@ -493,5 +534,8 @@ onMounted(() => { init(); });
         </section>
       </div>
     </section>
+    <Transition name="channel-log">
+      <p v-if="channelConflictLog" class="channel-conflict-log" role="status">{{ channelConflictLog }}</p>
+    </Transition>
   </main>
 </template>
