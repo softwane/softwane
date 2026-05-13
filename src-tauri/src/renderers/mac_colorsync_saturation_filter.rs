@@ -63,7 +63,7 @@ impl MacColorSyncSaturationFilter {
             ),
         };
         let bucket = (amount * 100.0).round() as u32;
-        if self.last_bucket == Some(bucket) && !saturation.is_changed() {
+        if self.last_bucket == Some(bucket) {
             let _ = tx.try_send(EngineEvent::Renderer(
                 RendererEvent::RenderUnappliedDueToUnchanged {
                     renderer_name: self.name,
@@ -71,6 +71,7 @@ impl MacColorSyncSaturationFilter {
             ));
             return;
         }
+        let bucketed_amount = bucket as f64 / 100.0;
 
         if let Err(err) = fs::create_dir_all(&self.profile_dir) {
             let _ = tx.try_send(EngineEvent::Renderer(RendererEvent::RenderFailed {
@@ -106,7 +107,7 @@ impl MacColorSyncSaturationFilter {
 
         let ok = unsafe {
             softwane_macos_colorsync_set_saturation(
-                amount,
+                bucketed_amount,
                 c_baseline_path.as_ptr(),
                 c_path.as_ptr(),
             )
