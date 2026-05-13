@@ -16,8 +16,9 @@ use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
 use crate::channels::ChannelValue;
-use crate::events::{EngineEvent, RendererEvent};
+use crate::engine::commands::EngineEvent;
 use crate::utils::Update;
+use super::events::RendererEvent;
 
 #[derive(Debug)]
 pub(super) struct MacColorSyncSaturationFilter {

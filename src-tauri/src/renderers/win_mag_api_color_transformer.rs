@@ -26,8 +26,9 @@ use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
 use crate::channels::ChannelValue;
-use crate::events::{EngineEvent, RendererEvent};
+use crate::engine::commands::EngineEvent;
 use crate::utils::Update;
+use super::events::RendererEvent;
 
 use super::utils::{ColorTransformMatrix, kelvin_to_rgb};
 

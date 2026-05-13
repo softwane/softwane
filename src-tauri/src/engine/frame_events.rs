@@ -1,4 +1,4 @@
-use crate::{channels::ChannelType, events::{ChannelCommand, StateCommand}};
+use crate::{channels::ChannelType, channels::commands::ChannelCommand, timer_state_machine::commands::StateCommand};
 
 #[derive(Debug)]
 pub struct FrameEvents {

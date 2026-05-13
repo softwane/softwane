@@ -17,6 +17,8 @@ export default defineConfig({
     // 直接面向现代引擎，不进行任何语法降级
     target: ['es2021', 'chrome100', 'safari15'],
     // 彻底禁用 polyfill
-    polyfillModulePreload: false, 
+    modulePreload: {
+      polyfill: false,
+    }, 
   }
 });

@@ -8,7 +8,8 @@ use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
 use crate::channels::{ChannelSwitchStates, LogicFrame};
-use crate::events::{EngineEvent, RendererEvent};
+use crate::engine::commands::EngineEvent;
+use super::events::RendererEvent;
 
 // TODO: add test using mock
 

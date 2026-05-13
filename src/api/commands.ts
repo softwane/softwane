@@ -60,7 +60,7 @@ export const getAvailableStoredConfig = () =>
 export const getPresetSessionDurations = () =>
   invoke<number[]>("get_preset_session_durations");
 
-export const updatePresetSessionDurations = (durations: number[]) =>
+export const updatePresetSessionDurations = (durations: [number, number, number]) =>
   invoke<void>("update_preset_session_durations", { durations });
 
 export const getLastCrash = () =>
@@ -72,6 +72,13 @@ export const setAutostartEnabled = (enabled: boolean) =>
   invoke<void>("set_autostart_enabled", { enabled });
 
 export const isAutostartEnabled = () => invoke<boolean>("is_autostart_enabled");
+
+// ── Silent start ───────────────────────────────────────────────────────
+
+export const getSilentStart = () => invoke<boolean>("get_silent_start");
+
+export const setSilentStart = (enabled: boolean) =>
+  invoke<void>("set_silent_start", { enabled });
 
 // ── Progress channel ──────────────────────────────────────────────────
 

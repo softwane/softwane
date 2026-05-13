@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     engine::FrameEvents,
-    events::ChannelCommand,
     timer_state_machine::*,
     utils::*,
 };
 use super::*;
+use super::commands::ChannelCommand;
 
 
 

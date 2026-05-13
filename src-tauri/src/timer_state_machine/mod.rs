@@ -1,10 +1,11 @@
 mod state;
 mod config;
+pub mod commands;
 
 pub use state::*;
 pub use config::*;
 
-use crate::events::StateCommand;
+use commands::StateCommand;
 use crate::engine::FrameEvents;
 
 #[derive(Debug)]

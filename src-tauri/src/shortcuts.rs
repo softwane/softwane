@@ -35,10 +35,9 @@ use tauri_plugin_store::StoreExt;
 use thiserror::Error;
 
 use crate::engine::EngineHandle;
-use crate::events::{
-    CommandError, EngineEvent, StateCommand, forward_engine_sync,
-    get_preset_session_durations,
-};
+use crate::commands::{CommandError, get_preset_session_durations};
+use crate::engine::commands::{EngineEvent, forward_engine_sync};
+use crate::timer_state_machine::commands::StateCommand;
 use crate::state::SharedTimerState;
 use crate::timer_state_machine::TimerState;
 use crate::window::{WindowCommands, toggle_main_window_sync};

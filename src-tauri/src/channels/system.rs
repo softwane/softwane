@@ -2,8 +2,8 @@
 //! now with store-backed persistence.
 
 use crate::engine::FrameEvents;
-use crate::events::ChannelCommand;
 use crate::timer_state_machine::TimerState;
+use super::commands::ChannelCommand;
 use super::*;
 
 #[derive(Debug)]

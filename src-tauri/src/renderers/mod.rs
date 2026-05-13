@@ -5,6 +5,7 @@
 //! calls its methods every frame.
 
 mod utils;
+pub mod events;
 
 #[cfg(target_os = "windows")]
 mod windows;

@@ -1,4 +1,4 @@
-mod events;
+mod commands;
 mod engine;
 mod timer_state_machine;
 mod channels;
@@ -8,9 +8,6 @@ mod shortcuts;
 mod state;
 mod tray;
 mod window;
-
-use engine::EngineHandle;
-use events::EngineEvent;
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -22,10 +19,11 @@ use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_store::StoreBuilder;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-use crate::events::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS, clear_progress_channel};
-use crate::shortcuts::{STORE_KEY_SHORTCUT_BINDINGS, default_shortcut_bindings};
-use crate::tray::notify_crash;
-use crate::window::{STORE_KEY_SILENT_START, open_main_window};
+use commands::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS};
+use engine::{Engine, EngineHandle, commands::{clear_progress_channel, EngineEvent}};
+use shortcuts::{STORE_KEY_SHORTCUT_BINDINGS, default_shortcut_bindings};
+use tray::notify_crash;
+use window::{STORE_KEY_SILENT_START, open_main_window};
 
 #[allow(dead_code)]
 struct LogGuard(tracing_appender::non_blocking::WorkerGuard);
@@ -149,7 +147,7 @@ pub fn run() {
 
             let shared_state = state::SharedTimerState::new();
 
-            let engine = engine::Engine::new(
+            let engine = Engine::new(
                 app.handle().clone(),
                 event_rx,
                 event_tx.clone(),
@@ -181,29 +179,30 @@ pub fn run() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            events::start_session,
-            events::take_break_now,
-            events::stop_session,
-            events::enter_preview,
-            events::exit_preview,
-            events::update_preview_progress,
-            events::update_settling_duration,
-            events::update_reverse_duration,
-            events::force_reset,
-            events::toggle_channel_switch,
-            events::update_target_channel_value,
-            events::update_progress_begin_ratio,
-            events::update_progress_curve_params,
-            events::update_settling_curve_params,
-            events::update_reverse_curve_params,
-            events::register_progress_channel,
-            events::get_available_stored_config,
-            events::get_preset_session_durations,
-            events::update_preset_session_durations,
-            events::get_last_crash,
-            events::acknowledge_crash,
-            events::set_autostart_enabled,
-            events::is_autostart_enabled,
+            timer_state_machine::commands::start_session,
+            timer_state_machine::commands::take_break_now,
+            timer_state_machine::commands::stop_session,
+            timer_state_machine::commands::enter_preview,
+            timer_state_machine::commands::exit_preview,
+            timer_state_machine::commands::update_preview_progress,
+            timer_state_machine::commands::update_settling_duration,
+            timer_state_machine::commands::update_reverse_duration,
+            commands::force_reset,
+            channels::commands::toggle_channel_switch,
+            channels::commands::update_target_channel_value,
+            channels::commands::update_progress_begin_ratio,
+            channels::commands::update_progress_curve_params,
+            channels::commands::update_settling_curve_params,
+            channels::commands::update_reverse_curve_params,
+            engine::commands::register_progress_channel,
+            engine::commands::clear_progress_channel,
+            commands::get_available_stored_config,
+            commands::get_preset_session_durations,
+            commands::update_preset_session_durations,
+            commands::get_last_crash,
+            commands::acknowledge_crash,
+            commands::set_autostart_enabled,
+            commands::is_autostart_enabled,
             shortcuts::get_shortcut_bindings,
             shortcuts::update_shortcut_bindings,
             window::get_silent_start,

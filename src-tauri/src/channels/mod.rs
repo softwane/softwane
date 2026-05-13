@@ -3,6 +3,7 @@ mod config;
 mod channel_implementation;
 mod system;
 mod curves;
+pub mod commands;
 
 pub use config::*;
 pub use channel_implementation::*;

@@ -1,40 +1,17 @@
-// TODO: Event should belong to Engine and those sub-system.
-// Commands and command errors should be where? I dunno.
-// Window should be in an independent file.
-
-mod timer_state_commands;
-mod channel_commands;
-mod renderer_events;
-mod progress_commands;
-
 use serde::Serialize;
-use tauri::{AppHandle, Error as TauriError, State};
+use tauri::{AppHandle, Error as TauriError, State, Runtime};
 use tauri_plugin_autostart::{Error as AutostartError, ManagerExt as AutostartManagerExt};
 use tauri_plugin_store::{Error as StoreError, StoreExt};
 use thiserror::Error;
-use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::mpsc::{Sender, error::SendError};
+use tokio::sync::mpsc::error::{SendError, TrySendError};
 
 use crate::channels::{SENSORY_CHANNEL_TYPES, load_channel_config};
 use crate::engine::{EngineHandle, StoredConfig};
+use crate::engine::commands::{EngineEvent, forward_engine};
 use crate::timer_state_machine::load_timer_config;
+use crate::tray::refresh_tray_menu;
 
-pub use self::timer_state_commands::*;
-pub use self::channel_commands::*;
-pub use self::renderer_events::*;
-pub use self::progress_commands::*;
-
-pub const STORE_KEY_LAST_CRASH: &str = "program_last_crash";
-
-#[derive(Debug)]
-pub enum EngineEvent {
-    State(StateCommand),
-    Channel(ChannelCommand),
-    Renderer(RendererEvent),
-    Progress(ProgressCommand),
-    ForceReset,
-    Shutdown,
-}
+// ── Error ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Error)]
 pub enum CommandError {
@@ -66,40 +43,13 @@ impl Serialize for CommandError {
     }
 }
 
-async fn forward_engine(
-    tx: Sender<EngineEvent>,
-    event: EngineEvent,
-) -> Result<(), CommandError> {
-    tracing::debug!("forward_engine: Sending event: {event:?}");
-    tx.send(event).await?;
-    Ok(())
-}
+// ── Store keys ────────────────────────────────────────────────────────
 
-pub(super) fn forward_engine_sync(
-    tx: Sender<EngineEvent>,
-    event: EngineEvent,
-)  {
-    tauri::async_runtime::spawn(async move {
-        if let Err(err) = forward_engine(tx, event).await {
-            tracing::error!("Failed to forward engine event: {err:?}.");
-        }
-    });
-}
+pub const STORE_KEY_LAST_CRASH: &str = "program_last_crash";
+pub const STORE_KEY_PRESET_SESSION_DURATIONS: &str = "session_durations_ms";
+pub const DEFAULT_DURATIONS: [u64; 3] = [25 * 60_000, 50 * 60_000, 90 * 60_000];
 
-fn forward_engine_nowait(
-    tx: Sender<EngineEvent>,
-    event: EngineEvent,
-) -> Result<(), CommandError> {
-    match tx.try_send(event) {
-        Ok(_) => Ok(()),
-        Err(TrySendError::Closed(event)) => {
-            Err(CommandError::EngineClosed(SendError(event)))
-        },
-        Err(err) => {
-            Err(CommandError::EngineChannelFull(err))
-        }
-    }
-}
+// ── Misc commands ─────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn get_available_stored_config(app_handle: AppHandle) -> Result<StoredConfig, CommandError> {
@@ -149,4 +99,41 @@ pub fn set_autostart_enabled(app_handle: AppHandle, enabled: bool) -> Result<(),
 #[tauri::command]
 pub fn is_autostart_enabled(app_handle: AppHandle) -> Result<bool, CommandError> {
     Ok(app_handle.autolaunch().is_enabled()?)
+}
+
+// ── Preset session durations ──────────────────────────────────────────
+
+#[tauri::command]
+pub fn get_preset_session_durations<R: Runtime>(app_handle: AppHandle<R>) -> [u64; 3] {
+    let store = match app_handle.store("config.json") {
+        Ok(s) => s,
+        Err(err) => {
+            tracing::error!("Trying to create or to load a store failed: {err:?}.");
+            return DEFAULT_DURATIONS;
+        }
+    };
+    store.get(STORE_KEY_PRESET_SESSION_DURATIONS)
+        .and_then(|v| Some(serde_json::from_value(v)
+            .inspect_err(|e| {
+                tracing::warn!(?e, "stored preset session durations are failed to deserialized, using default");
+                let value = serde_json::to_value(DEFAULT_DURATIONS).expect("DURATIONS serialization is infallible");
+                store.set(STORE_KEY_PRESET_SESSION_DURATIONS, value);
+            })
+            .unwrap_or(DEFAULT_DURATIONS)
+        ))
+        .expect("Defaults are set when setting up")
+}
+
+#[tauri::command]
+pub fn update_preset_session_durations(app_handle: AppHandle, durations: [u64; 3]) -> Result<(), CommandError> {
+    let store = app_handle.store("config.json")?;
+    store.set(
+        STORE_KEY_PRESET_SESSION_DURATIONS.to_string(),
+        serde_json::to_value::<[u64; 3]>(durations.try_into().unwrap()).expect("[u64; 3] serialization is infallible"),
+    );
+
+    if let Err(err) = refresh_tray_menu(&app_handle) {
+        tracing::error!("Failed to refresh tray menu after updating preset durations: {err:?}.");
+    }
+    Ok(())
 }

@@ -51,7 +51,7 @@ macro_rules! define_channels {
         //       impl for f64 (with tolerance) / for u32 (==), and replace
         //       #[derive(PartialEq)] with a manual impl.
         #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-        #[serde(rename_all = "snake_case")]
+        #[serde(tag = "type", content = "data", rename_all = "snake_case")]
         pub enum ChannelValue {
             $( $val_var($data_type), )*
         }

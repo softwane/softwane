@@ -6,6 +6,7 @@
 mod frame_events;
 mod config;
 mod shutdown;
+pub mod commands;
 pub use frame_events::FrameEvents;
 pub use config::StoredConfig;
 
@@ -23,13 +24,15 @@ use tauri::Wry;
 use tauri_plugin_store::Store;
 
 use crate::{
-    events::{EngineEvent, ProgressCommand, ProgressPayload, RendererEvent},
     state::SharedTimerState,
     tray::{refresh_tray_menu, update_tray_progress},
 };
 use crate::timer_state_machine::{TimerStateMachine, load_timer_config};
 use crate::channels::{SensoryChannelsSystem, load_channel_config_array};
 use crate::renderers::RendererDispatcher;
+
+use commands::{EngineEvent, ProgressCommand, ProgressPayload};
+use crate::renderers::events::RendererEvent;
 
 const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(100); // 10 fps 给前端
 

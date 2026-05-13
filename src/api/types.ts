@@ -1,11 +1,11 @@
 // ── 通道类型枚举（与 ChannelType: serde rename_all = snake_case 对齐）
 export type ChannelType = "saturation" | "color_temp" | "brightness";
 
-// ── 通道值（tagged union，后端 ChannelValue）
+// ── 通道值（tagged union，后端 ChannelValue，tag="type", content="data"）
 export type ChannelValue =
-  | { saturation: number }
-  | { color_temp_kelvin: number }
-  | { brightness: number };
+  | { type: "saturation"; data: number }
+  | { type: "color_temp_kelvin"; data: number }
+  | { type: "brightness"; data: number };
 
 // ── 缓动曲线参数
 export type CurveParameters = { normalized_sigmoid: { steepness: number } };

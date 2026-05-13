@@ -9,7 +9,7 @@ use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
 use crate::channels::{ChannelSwitchStates, ChannelType, LogicFrame};
-use crate::events::EngineEvent;
+use crate::engine::commands::EngineEvent;
 
 use super::mac_colorsync_saturation_filter::MacColorSyncSaturationFilter;
 use super::mac_core_graphics_gamma_tweaker::CoreGraphicsGammaTweaker;

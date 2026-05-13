@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow};
 use tauri_plugin_store::StoreExt;
 
-use crate::events::CommandError;
+use crate::commands::CommandError;
 
 pub const STORE_KEY_SILENT_START: &str = "silent_start";
 

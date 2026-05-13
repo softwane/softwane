@@ -9,10 +9,9 @@ use tauri::{
 
 use crate::{
     engine::EngineHandle,
-    events::{
-        EngineEvent, ProgressPayload, StateCommand,
-        forward_engine_sync, get_preset_session_durations,
-    },
+    commands::get_preset_session_durations,
+    engine::commands::{EngineEvent, ProgressPayload, forward_engine_sync},
+    timer_state_machine::commands::StateCommand,
     state::SharedTimerState,
     timer_state_machine::TimerState,
     window::{WindowCommands, open_main_window, toggle_main_window_sync},
