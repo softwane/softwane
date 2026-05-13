@@ -114,20 +114,19 @@ pub struct ChannelConfig {
     pub persistent_state_params_table: PersistentStateParamsTable,
 }
 
-pub fn load_channel_config(store: &tauri_plugin_store::Store<tauri::Wry>, channel_type: ChannelType) -> ChannelConfig {
+pub fn load_channel_config(store: &Store<Wry>, channel_type: ChannelType) -> ChannelConfig {
     let key = channel_type.store_key();
-    let Some(raw) = store.get(&key) else {
-        tracing::info!(?channel_type, "no stored config, using default");
-        return DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type];
-    };
-    serde_json::from_value(raw).unwrap_or_else(|e| {
-        tracing::warn!(
-            ?channel_type, ?e,
-            "stored config schema mismatch, using default"
-        );
-        DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type]
-        
-    })
+    store.get(&key)
+        .and_then(|v| Some(serde_json::from_value(v)
+            .inspect_err(|e| {
+                tracing::warn!(?channel_type, ?e,"stored config schema mismatch, using default");
+                let value = serde_json::to_value(DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type])
+                    .expect("ChannelConfig serialization is infallible");
+                store.set(&key, value);
+            })
+            .unwrap_or(DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type])
+        ))
+        .expect("Defaults are set when setting up.")
 }
 
 pub fn load_channel_config_array(store: &Store<Wry>) -> ChannelConfigArray {

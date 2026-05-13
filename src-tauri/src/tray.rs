@@ -10,11 +10,12 @@ use tauri::{
 use crate::{
     engine::EngineHandle,
     events::{
-        EngineEvent, ProgressPayload, StateCommand, WindowCommands,
-        forward_engine_sync, get_preset_session_durations, open_main_window, toggle_main_window_sync,
+        EngineEvent, ProgressPayload, StateCommand,
+        forward_engine_sync, get_preset_session_durations,
     },
     state::SharedTimerState,
-    timer_state_machine::TimerState
+    timer_state_machine::TimerState,
+    window::{WindowCommands, open_main_window, toggle_main_window_sync},
 };
 
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {

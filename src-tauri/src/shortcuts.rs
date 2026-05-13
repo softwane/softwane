@@ -36,11 +36,12 @@ use thiserror::Error;
 
 use crate::engine::EngineHandle;
 use crate::events::{
-    CommandError, EngineEvent, StateCommand, WindowCommands, forward_engine_sync,
-    get_preset_session_durations, toggle_main_window_sync,
+    CommandError, EngineEvent, StateCommand, forward_engine_sync,
+    get_preset_session_durations,
 };
 use crate::state::SharedTimerState;
 use crate::timer_state_machine::TimerState;
+use crate::window::{WindowCommands, toggle_main_window_sync};
 
 pub const STORE_KEY_SHORTCUT_BINDINGS: &str = "shortcut_bindings";
 
@@ -411,16 +412,17 @@ pub fn get_shortcut_bindings(
     app: AppHandle,
 ) -> Result<ShortcutBindings, CommandError> {
     let store = app.store("config.json")?;
-    let raw = store.get(STORE_KEY_SHORTCUT_BINDINGS);
-    let bindings = raw
-        .and_then(|v| serde_json::from_value(v)
-            .inspect_err(|e| tracing::warn!(
-                "Stored shortcut bindings malformed, using defaults: {e}"
-            ))
-            .ok()
-        )
-        .unwrap_or_else(default_shortcut_bindings);
-    Ok(bindings)
+    Ok(store.get(STORE_KEY_SHORTCUT_BINDINGS)
+        .and_then(|v| Some(serde_json::from_value(v)
+            .inspect_err(|e| {
+                tracing::warn!(?e, "stored shortcut bindings are failed to deserialization, using default");
+                let value = serde_json::to_value(default_shortcut_bindings())
+                    .expect("default_shortcut_bindings serialization is infalliible");
+                store.set(STORE_KEY_SHORTCUT_BINDINGS, value);
+            })
+            .unwrap_or(default_shortcut_bindings())
+        ))
+        .expect("Defaults are set when setting up"))
 }
 
 /// Validate, apply, and persist a new set of bindings as a single

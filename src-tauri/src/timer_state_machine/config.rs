@@ -31,8 +31,16 @@ impl Default for TimerConfig {
 pub fn load_timer_config(store: &Store<Wry>) -> TimerConfig{
     store
         .get(STORE_KEY_TIMER)
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default()
+        .and_then(|v| Some(serde_json::from_value(v)
+            .inspect_err(|e| {
+                tracing::warn!(?e, "stored timer config schema mismatch, using default");
+                let value = serde_json::to_value(TimerConfig::default())
+                    .expect("TimerConfig serialization is infallible");
+                store.set(STORE_KEY_TIMER, value);
+            })
+            .unwrap_or_default()
+        ))
+        .expect("Defaults are set when setting up.")
 }
 
 pub fn persist(timer: &TimerStateMachine, store: &Store<Wry>) {
@@ -40,7 +48,7 @@ pub fn persist(timer: &TimerStateMachine, store: &Store<Wry>) {
         settling_duration_ms: timer.settling_duration_ms,
         reverse_duration_ms: timer.reverse_duration_ms,
     };
-    store.set(STORE_KEY_TIMER, serde_json::to_value(config).unwrap());
+    store.set(STORE_KEY_TIMER, serde_json::to_value(config).expect("TimerConfig serialization is infallible"));
 }
 
 pub fn store_defaults() -> Vec<(String, serde_json::Value)> {

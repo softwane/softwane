@@ -7,6 +7,7 @@ mod utils;
 mod shortcuts;
 mod state;
 mod tray;
+mod window;
 
 use engine::EngineHandle;
 use events::EngineEvent;
@@ -24,6 +25,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use crate::events::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS, clear_progress_channel};
 use crate::shortcuts::{STORE_KEY_SHORTCUT_BINDINGS, default_shortcut_bindings};
 use crate::tray::notify_crash;
+use crate::window::{STORE_KEY_SILENT_START, open_main_window};
 
 #[allow(dead_code)]
 struct LogGuard(tracing_appender::non_blocking::WorkerGuard);
@@ -54,14 +56,16 @@ pub fn run() {
 
             if cfg!(debug_assertions) {
                 tracing_subscriber::registry()
-                    .with(EnvFilter::from_default_env()
-                    .add_directive("softwane_lib=debug".parse().expect("directive")))
+                    .with(EnvFilter::from_default_env().add_directive(
+                        "softwane_lib=debug".parse().expect("directive")
+                    ))
                     .with(fmt::layer().with_writer(std::io::stderr))
                     .init();
             } else {
                 tracing_subscriber::registry()
-                    .with(EnvFilter::from_default_env()
-                    .add_directive("softwane_lib=info".parse().expect("directive")))
+                    .with(EnvFilter::from_default_env().add_directive(
+                        "softwane_lib=info".parse().expect("directive")
+                    ))
                     .with(fmt::layer().with_writer(non_blocking).json())
                     .init();
             }
@@ -83,10 +87,32 @@ pub fn run() {
                 serde_json::to_value(default_shortcut_bindings())
                     .expect("default shortcut bindings serialise"),
             );
+            defaults.insert(
+                STORE_KEY_SILENT_START.into(),
+                serde_json::json!(false),
+            );
             let store = StoreBuilder::new(app.handle(), "config.json")
                 .auto_save(Duration::from_secs(1))
                 .defaults(defaults)
                 .build()?;
+
+            // Silent start: only open window if disabled in config
+            let silent_start = store
+                .get(STORE_KEY_SILENT_START)
+                .and_then(|v| v.as_bool().or_else(|| {
+                    tracing::warn!("stored config of {STORE_KEY_SILENT_START} is not a boolean (it is {v}), using default: false");    
+                    store.set(STORE_KEY_SILENT_START, false);
+                    Some(false)
+                }))
+                .expect("Defaults are set.");
+            if !silent_start {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = open_main_window(app_handle).await {
+                        tracing::error!("Failed to open main window on startup: {err:?}.");
+                    }
+                });
+            }
 
             // Autostart enabled by default
             app.autolaunch().enable().ok();
@@ -180,6 +206,8 @@ pub fn run() {
             events::is_autostart_enabled,
             shortcuts::get_shortcut_bindings,
             shortcuts::update_shortcut_bindings,
+            window::get_silent_start,
+            window::set_silent_start,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build softwane");

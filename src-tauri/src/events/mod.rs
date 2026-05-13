@@ -6,7 +6,6 @@ mod timer_state_commands;
 mod channel_commands;
 mod renderer_events;
 mod progress_commands;
-mod window_commands;
 
 use serde::Serialize;
 use tauri::{AppHandle, Error as TauriError, State};
@@ -24,7 +23,6 @@ pub use self::timer_state_commands::*;
 pub use self::channel_commands::*;
 pub use self::renderer_events::*;
 pub use self::progress_commands::*;
-pub use self::window_commands::*;
 
 pub const STORE_KEY_LAST_CRASH: &str = "program_last_crash";
 

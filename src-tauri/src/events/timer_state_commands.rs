@@ -82,11 +82,16 @@ pub fn get_preset_session_durations<R: Runtime>(app_handle: AppHandle<R>) -> [u6
             return DEFAULT_DURATIONS;
         }
     };
-    let raw = store.get(STORE_KEY_PRESET_SESSION_DURATIONS);
-    match raw.and_then(|v| serde_json::from_value(v).ok()) {
-        Some(d) => d,
-        _ => DEFAULT_DURATIONS,
-    }
+    store.get(STORE_KEY_PRESET_SESSION_DURATIONS)
+        .and_then(|v| Some(serde_json::from_value(v)
+            .inspect_err(|e| {
+                tracing::warn!(?e, "stored preset session durations are failed to deserialized, using default");
+                let value = serde_json::to_value(DEFAULT_DURATIONS).expect("DURATIONS serialization is infallible");
+                store.set(STORE_KEY_PRESET_SESSION_DURATIONS, value);
+            })
+            .unwrap_or(DEFAULT_DURATIONS)
+        ))
+        .expect("Defaults are set when setting up")
 }
 
 #[tauri::command]

@@ -1,6 +1,9 @@
 use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow};
+use tauri_plugin_store::StoreExt;
 
 use crate::events::CommandError;
+
+pub const STORE_KEY_SILENT_START: &str = "silent_start";
 
 /// Show the main window to foreground and set focus; create the main window it does not exist.
 pub async fn open_main_window<R: Runtime>(app_handle: AppHandle<R>) -> Result<(), CommandError> {
@@ -73,4 +76,27 @@ pub fn toggle_main_window_sync(app_handle: AppHandle, wincmd: WindowCommands) {
             tracing::error!("Failed to toggle main window from shortcut: {err:?}.");
         }
     });
+}
+
+#[tauri::command]
+pub fn get_silent_start(app_handle: AppHandle) -> Result<bool, CommandError> {
+    let store = app_handle.store("config.json")?;
+    Ok(store
+        .get(STORE_KEY_SILENT_START)
+        .and_then(|v| v.as_bool().or_else(|| {
+            tracing::warn!("stored config for {STORE_KEY_SILENT_START} is not a boolean (it is {v}), using default: false");
+            store.set(STORE_KEY_SILENT_START, false);
+            Some(false)
+        }))
+        .expect("Defaults are set."))
+}
+
+#[tauri::command]
+pub fn set_silent_start(app_handle: AppHandle, enabled: bool) -> Result<(), CommandError> {
+    let store = app_handle.store("config.json")?;
+    store.set(
+        STORE_KEY_SILENT_START.to_string(),
+        serde_json::Value::Bool(enabled),
+    );
+    Ok(())
 }
