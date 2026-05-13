@@ -168,7 +168,7 @@ impl TimerStateMachine {
     /// config-modifying command (`UpdateSettlingDuration` /
     /// `UpdateReverseDuration`) is processed.
     pub fn handle_commands(&mut self, frame_events: &mut FrameEvents) {
-        for command in frame_events.state_commands.drain(..) {
+        for command in std::mem::take(&mut frame_events.state_commands) {
             let needs_persist = matches!(
                 command,
                 StateCommand::UpdateSettlingDuration { .. }

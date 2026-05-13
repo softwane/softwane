@@ -23,8 +23,7 @@ impl SensoryChannelsSystem {
     /// `ToggleSwitch` is processed, and accumulates channels that need
     /// persistence into `frame_events.need_persist.channels_system`.
     pub fn handle_commands(&mut self, frame_events: &mut FrameEvents) {
-        let channel_commands = std::mem::take(&mut frame_events.channel_commands);
-        for command in channel_commands {
+        for command in std::mem::take(&mut frame_events.channel_commands) {
             if matches!(command, ChannelCommand::ToggleSwitch { .. }) {
                 frame_events.switch_changed = true;
             }

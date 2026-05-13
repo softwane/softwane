@@ -124,9 +124,9 @@ impl Engine {
         if frame_events.need_persist.timer_state_machine {
             crate::timer_state_machine::persist(&self.timer, &self.store);
         }
-        if let Some(ref channel_types) = frame_events.need_persist.channels_system {
+        if let Some(channel_types) = frame_events.need_persist.channels_system.take() {
             for ct in channel_types {
-                crate::channels::persist_channel(&self.channels, *ct, &self.store);
+                crate::channels::persist_channel(&self.channels, ct, &self.store);
             }
         }
 
