@@ -1,54 +1,93 @@
-use serde::{Deserialize, Serialize};
-use tauri::{State, ipc::Channel};
-use tokio::sync::mpsc::{Sender, error::{SendError, TrySendError}};
+use serde::Deserialize;
+use tauri::{AppHandle, Manager, Webview, ipc::JavaScriptChannelId};
+use tauri_plugin_store::StoreExt;
+use tokio::sync::mpsc::error::{SendError, TrySendError};
 
 use crate::{
-    engine::EngineHandle,
-    timer_state_machine::{TimerState, commands::StateCommand},
-    channels::commands::ChannelCommand,
-    renderers::events::RendererEvent,
+    channels::{SENSORY_CHANNEL_TYPES, commands::ChannelCommand, load_channel_config},
+    timer_state_machine::{commands::StateCommand, load_timer_config},
     commands::CommandError,
 };
+use super::{EngineHandle, EngineEvent, ProgressCommandInner, StoredConfig};
 
-// ── EngineEvent ───────────────────────────────────────────────────────
-
-#[derive(Debug)]
-pub enum EngineEvent {
+#[derive(Debug, Deserialize)]
+#[serde(tag = "category", content = "content", rename_all = "snake_case")]
+pub enum EngineCommand {
     State(StateCommand),
     Channel(ChannelCommand),
-    Renderer(RendererEvent),
     Progress(ProgressCommand),
     ForceReset,
     Shutdown,
 }
 
-// ── Forward helpers ──────────────────────────────────────────────────
+#[derive(Deserialize)]
+#[serde(tag = "command", rename_all = "snake_case")]
+pub enum ProgressCommand {
+    RegisterChannel{ channel: JavaScriptChannelId, window: String },
+    ClearChannel{ window: String },
+}
 
-pub async fn forward_engine(
-    tx: Sender<EngineEvent>,
-    event: EngineEvent,
+impl std::fmt::Debug for ProgressCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RegisterChannel{ channel: _, window } => write!(f, "RegisterChannel on {window} window"),
+            Self::ClearChannel{ window } => write!(f, "ClearChannel on {window} window"),
+        }
+    }
+}
+
+// ── Forward commands ──────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn command_engine(
+    webview: Webview,
+    command: EngineCommand,
 ) -> Result<(), CommandError> {
-    tracing::debug!("forward_engine: Sending event: {event:?}");
-    tx.send(event).await?;
+    let app = webview.app_handle().clone();
+    let event = match command {
+        EngineCommand::State(cmd) => EngineEvent::State(cmd),
+        EngineCommand::Channel(cmd) => EngineEvent::Channel(cmd),
+        EngineCommand::ForceReset => EngineEvent::ForceReset,
+        EngineCommand::Shutdown => EngineEvent::Shutdown,
+        EngineCommand::Progress(cmd) => {
+            let inner_command = match cmd {
+                ProgressCommand::RegisterChannel { channel, window } => {
+                    let initialized_channel = channel.channel_on(webview);
+                    ProgressCommandInner::RegisterChannel{ channel: initialized_channel, window}
+                },
+                ProgressCommand::ClearChannel { window } => ProgressCommandInner::ClearChannel{ window },
+            };
+            EngineEvent::Progress(inner_command)
+        },
+    };
+    tracing::debug!("forward_engine: Sending command: {event:?}");
+    app.state::<EngineHandle>().tx.send(event).await?;
     Ok(())
 }
 
-pub fn forward_engine_sync(
-    tx: Sender<EngineEvent>,
-    event: EngineEvent,
-) {
-    tauri::async_runtime::spawn(async move {
-        if let Err(err) = forward_engine(tx, event).await {
-            tracing::error!("Failed to forward engine event: {err:?}.");
-        }
-    });
-}
-
-pub fn forward_engine_nowait(
-    tx: Sender<EngineEvent>,
-    event: EngineEvent,
+#[tauri::command]
+pub fn command_engine_nowait(
+    webview: Webview,
+    command: EngineCommand,
 ) -> Result<(), CommandError> {
-    match tx.try_send(event) {
+    let app = webview.app_handle().clone();
+    let event = match command {
+        EngineCommand::State(cmd) => EngineEvent::State(cmd),
+        EngineCommand::Channel(cmd) => EngineEvent::Channel(cmd),
+        EngineCommand::ForceReset => EngineEvent::ForceReset,
+        EngineCommand::Shutdown => EngineEvent::Shutdown,
+        EngineCommand::Progress(cmd) => {
+            let inner_command = match cmd {
+                ProgressCommand::RegisterChannel { channel, window } => {
+                    let initialized_channel = channel.channel_on(webview);
+                    ProgressCommandInner::RegisterChannel{ channel: initialized_channel, window}
+                },
+                ProgressCommand::ClearChannel { window } => ProgressCommandInner::ClearChannel{ window },
+            };
+            EngineEvent::Progress(inner_command)
+        },
+    };
+    match app.state::<EngineHandle>().tx.try_send(event) {
         Ok(_) => Ok(()),
         Err(TrySendError::Closed(event)) => {
             Err(CommandError::EngineClosed(SendError(event)))
@@ -59,35 +98,13 @@ pub fn forward_engine_nowait(
     }
 }
 
-// ── Progress ──────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ProgressPayload {
-    pub timer_state: TimerState,
-}
-
-pub enum ProgressCommand {
-    RegisterChannel(Channel<ProgressPayload>),
-    ClearChannel,
-}
-use ProgressCommand::*;
-
-impl std::fmt::Debug for ProgressCommand {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::RegisterChannel(ch) => write!(f, "RegisterChannel(Channel(id = {}))", ch.id()),
-            Self::ClearChannel => f.debug_tuple("ClearChannel").finish(),
-        }
-    }
-}
-
 #[tauri::command]
-pub async fn register_progress_channel(engine_handle: State<'_, EngineHandle>, channel: Channel<ProgressPayload>) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), EngineEvent::Progress(RegisterChannel(channel))).await
-}
-
-#[tauri::command]
-pub fn clear_progress_channel(engine_handle: State<'_, EngineHandle>) {
-    forward_engine_sync(engine_handle.tx.clone(), EngineEvent::Progress(ClearChannel))
+pub fn get_available_stored_config(app_handle: AppHandle) -> Result<StoredConfig, CommandError> {
+    let store = app_handle.store("config.json")?;
+    let channel_configs = SENSORY_CHANNEL_TYPES.into_iter()
+        .filter(|c| c.is_available_on_this_platform())
+        .map(|c| (c, load_channel_config(&store, c)))
+        .collect();
+    let timer_config = load_timer_config(&store);
+    Ok(StoredConfig{ channel_configs, timer_config })
 }

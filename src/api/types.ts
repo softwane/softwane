@@ -1,3 +1,5 @@
+import type { Channel } from "@tauri-apps/api/core";
+
 // ── 通道类型枚举（与 ChannelType: serde rename_all = snake_case 对齐）
 export type ChannelType = "saturation" | "color_temp" | "brightness";
 
@@ -99,3 +101,34 @@ export interface KeyBinding {
 
 /** Map keyed by `ShortcutAction`.  Keys must be exhaustive. */
 export type ShortcutBindings = Record<ShortcutAction, KeyBinding>;
+
+// ── Command 枚举（前端 → 后端 forward_*，serde tag="command", rename_all="snake_case"） ──
+
+export type StateCommand =
+  | { command: "take_break_now" }
+  | { command: "stop_session" }
+  | { command: "enter_preview" }
+  | { command: "exit_preview" }
+  | { command: "start_session";             target_duration_ms: number }
+  | { command: "update_preview_progress";   progress: number }
+  | { command: "update_settling_duration";  duration_ms: number }
+  | { command: "update_reverse_duration";   duration_ms: number };
+
+export type ChannelCommand =
+  | { command: "toggle_switch";               channel_type: ChannelType;  switch_on: boolean }
+  | { command: "update_target_channel_value"; target_channel_value: ChannelValue }
+  | { command: "update_progress_begin_ratio"; channel_type: ChannelType;  progress_begin_ratio: number }
+  | { command: "update_progress_curve_paras"; channel_type: ChannelType;  curve_parameters: CurveParameters }
+  | { command: "update_settling_curve_paras"; channel_type: ChannelType;  curve_parameters: CurveParameters }
+  | { command: "update_reverse_curve_paras";  channel_type: ChannelType;  curve_parameters: CurveParameters };
+
+export type ProgressCommand =
+  | { command: "clear_channel";     window: string }
+  | { command: "register_channel";  channel: Channel<ProgressPayload>; window: string };
+
+export type EngineCommand =
+  | { category: "state";     content: StateCommand }
+  | { category: "channel";   content: ChannelCommand }
+  | { category: "progress";  content: ProgressCommand }
+  | { category: "force_reset" }
+  | { category: "shutdown" };

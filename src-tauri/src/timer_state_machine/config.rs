@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use tauri::Wry;
 use tauri_plugin_store::Store;
 
-use crate::timer_state_machine::TimerStateMachine;
+use crate::{
+    timer_state_machine::TimerStateMachine,
+};
 
 pub const DEFAULT_SETTLING_DURATION_MS: u64 = 5_000;
 pub const DEFAULT_REVERSE_DURATION_MS: u64 = 2_000;

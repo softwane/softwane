@@ -34,12 +34,6 @@ pub async fn open_main_window<R: Runtime>(app_handle: AppHandle<R>) -> Result<()
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum WindowCommands {
-    Close,
-    Hide,
-}
-
 fn close_main_window<R: Runtime>(window: WebviewWindow<R>) -> Result<(), CommandError>{
     window.close().map_err(|e| CommandError::CloseWindowFailed(e))?;
     Ok(())
@@ -48,6 +42,12 @@ fn close_main_window<R: Runtime>(window: WebviewWindow<R>) -> Result<(), Command
 fn hide_main_window<R: Runtime>(window: WebviewWindow<R>) -> Result<(), CommandError> {
     window.hide().map_err(|e| CommandError::HideWindowFailed(e))?;
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum WindowCommands {
+    Close,
+    Hide,
 }
 
 pub async fn toggle_main_window<R: Runtime>(app_handle: AppHandle<R>, wincmd: WindowCommands) -> Result<(), CommandError> {

@@ -8,9 +8,10 @@ use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
-use crate::channels::{ChannelSwitchStates, ChannelType, LogicFrame};
-use crate::engine::commands::EngineEvent;
-
+use crate::{
+    channels::{ChannelSwitchStates, ChannelType, LogicFrame},
+    engine::EngineEvent,
+};
 use super::win_mag_api_color_transformer::WinMagAPIColorTransformer;
 
 #[derive(Debug)]

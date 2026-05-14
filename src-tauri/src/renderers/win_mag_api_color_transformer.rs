@@ -25,12 +25,15 @@ use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
-use crate::channels::ChannelValue;
-use crate::engine::commands::EngineEvent;
-use crate::utils::Update;
-use super::events::RendererEvent;
-
-use super::utils::{ColorTransformMatrix, kelvin_to_rgb};
+use crate::{
+    channels::ChannelValue,
+    engine::EngineEvent,
+    utils::Update,
+};
+use super::{
+    events::RendererEvent,
+    utils::{ColorTransformMatrix, kelvin_to_rgb},
+};
 
 #[derive(Debug, Clone)]
 pub(super) struct WinMagAPIColorTransformer {

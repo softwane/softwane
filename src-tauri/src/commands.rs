@@ -1,15 +1,14 @@
 use serde::Serialize;
-use tauri::{AppHandle, Error as TauriError, State, Runtime};
+use tauri::{AppHandle, Error as TauriError, Runtime};
 use tauri_plugin_autostart::{Error as AutostartError, ManagerExt as AutostartManagerExt};
 use tauri_plugin_store::{Error as StoreError, StoreExt};
 use thiserror::Error;
 use tokio::sync::mpsc::error::{SendError, TrySendError};
 
-use crate::channels::{SENSORY_CHANNEL_TYPES, load_channel_config};
-use crate::engine::{EngineHandle, StoredConfig};
-use crate::engine::commands::{EngineEvent, forward_engine};
-use crate::timer_state_machine::load_timer_config;
-use crate::tray::refresh_tray_menu;
+use crate::{
+    engine::EngineEvent,
+    tray::refresh_tray_menu,
+};
 
 // ── Error ─────────────────────────────────────────────────────────────
 
@@ -48,24 +47,6 @@ impl Serialize for CommandError {
 pub const STORE_KEY_LAST_CRASH: &str = "program_last_crash";
 pub const STORE_KEY_PRESET_SESSION_DURATIONS: &str = "session_durations_ms";
 pub const DEFAULT_DURATIONS: [u64; 3] = [25 * 60_000, 50 * 60_000, 90 * 60_000];
-
-// ── Misc commands ─────────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn get_available_stored_config(app_handle: AppHandle) -> Result<StoredConfig, CommandError> {
-    let store = app_handle.store("config.json")?;
-    let channel_configs = SENSORY_CHANNEL_TYPES.into_iter()
-        .filter(|c| c.is_available_on_this_platform())
-        .map(|c| (c, load_channel_config(&store, c)))
-        .collect();
-    let timer_config = load_timer_config(&store);
-    Ok(StoredConfig { channel_configs, timer_config })
-}
-
-#[tauri::command]
-pub async fn force_reset(engine_handle: State<'_, EngineHandle>) -> Result<(), CommandError> {
-    forward_engine(engine_handle.tx.clone(), EngineEvent::ForceReset).await
-}
 
 // ── Crash ───────────────────────────────────────────────────────────
 

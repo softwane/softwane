@@ -3,12 +3,12 @@
 //! If that becomes a problem, switch to [`spin_sleep`](https://crates.io/crates/spin_sleep)
 //! (already a dependency) for frame pacing.
 
-mod frame_events;
+mod events;
 mod config;
 mod shutdown;
 pub mod commands;
-pub use frame_events::FrameEvents;
-pub use config::StoredConfig;
+
+pub use events::*;
 
 use std::{
     panic::{catch_unwind, AssertUnwindSafe},
@@ -19,20 +19,17 @@ use std::{
 };
 
 use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
-use tauri::AppHandle;
-use tauri::Wry;
+use tauri::{AppHandle, Wry};
 use tauri_plugin_store::Store;
 
 use crate::{
+    channels::{SensoryChannelsSystem, load_channel_config_array},
+    timer_state_machine::{TimerStateMachine, load_timer_config},
+    renderers::{RendererDispatcher, events::RendererEvent},
     state::SharedTimerState,
     tray::{refresh_tray_menu, update_tray_progress},
 };
-use crate::timer_state_machine::{TimerStateMachine, load_timer_config};
-use crate::channels::{SensoryChannelsSystem, load_channel_config_array};
-use crate::renderers::RendererDispatcher;
-
-use commands::{EngineEvent, ProgressCommand, ProgressPayload};
-use crate::renderers::events::RendererEvent;
+use config::StoredConfig;
 
 const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(100); // 10 fps 给前端
 
@@ -159,11 +156,11 @@ impl Engine {
                 EngineEvent::Renderer(renderer_event) => log_renderer_event(&renderer_event),
                 EngineEvent::Progress(command) => {
                     match command {
-                        ProgressCommand::RegisterChannel(channel) => {
+                        ProgressCommandInner::RegisterChannel { channel, window: _ } => {
                             self.progress_channel = Some(channel);
                             self.last_progress_emit = Instant::now() - PROGRESS_EMIT_INTERVAL;
                         },
-                        ProgressCommand::ClearChannel => self.progress_channel = None,
+                        ProgressCommandInner::ClearChannel { window: _ } => self.progress_channel = None,
                     }
                 },
                 EngineEvent::ForceReset => frame_events.force_reset = true,

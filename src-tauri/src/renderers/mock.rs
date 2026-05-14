@@ -7,8 +7,10 @@ use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
-use crate::channels::{ChannelSwitchStates, LogicFrame};
-use crate::engine::commands::EngineEvent;
+use crate::{
+    channels::{ChannelSwitchStates, LogicFrame},
+    engine::EngineEvent,
+};
 use super::events::RendererEvent;
 
 // TODO: add test using mock

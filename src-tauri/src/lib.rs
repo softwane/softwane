@@ -1,11 +1,11 @@
-mod commands;
 mod engine;
 mod timer_state_machine;
 mod channels;
 mod renderers;
-mod utils;
-mod shortcuts;
 mod state;
+mod utils;
+mod commands;
+mod shortcuts;
 mod tray;
 mod window;
 
@@ -19,8 +19,8 @@ use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_store::StoreBuilder;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
+use engine::{Engine, EngineHandle, EngineEvent, ProgressCommandInner};
 use commands::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS};
-use engine::{Engine, EngineHandle, commands::{clear_progress_channel, EngineEvent}};
 use shortcuts::{STORE_KEY_SHORTCUT_BINDINGS, default_shortcut_bindings};
 use tray::notify_crash;
 use window::{STORE_KEY_SILENT_START, open_main_window};
@@ -174,29 +174,22 @@ pub fn run() {
         })
         .on_window_event(|window, event| match event {
             WindowEvent::CloseRequested { .. } if window.label() == "main" => {
-                clear_progress_channel(window.app_handle().state::<EngineHandle>());
+                let tx = window.app_handle().state::<EngineHandle>().tx.clone();
+                let event = EngineEvent::Progress(ProgressCommandInner::ClearChannel {
+                    window: window.label().to_string()
+                });
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = tx.send(event).await {
+                        tracing::error!("Failed to clear channel: {err:?}.");
+                    }
+                });
             },
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            timer_state_machine::commands::start_session,
-            timer_state_machine::commands::take_break_now,
-            timer_state_machine::commands::stop_session,
-            timer_state_machine::commands::enter_preview,
-            timer_state_machine::commands::exit_preview,
-            timer_state_machine::commands::update_preview_progress,
-            timer_state_machine::commands::update_settling_duration,
-            timer_state_machine::commands::update_reverse_duration,
-            commands::force_reset,
-            channels::commands::toggle_channel_switch,
-            channels::commands::update_target_channel_value,
-            channels::commands::update_progress_begin_ratio,
-            channels::commands::update_progress_curve_params,
-            channels::commands::update_settling_curve_params,
-            channels::commands::update_reverse_curve_params,
-            engine::commands::register_progress_channel,
-            engine::commands::clear_progress_channel,
-            commands::get_available_stored_config,
+            engine::commands::command_engine,
+            engine::commands::command_engine_nowait,
+            engine::commands::get_available_stored_config,
             commands::get_preset_session_durations,
             commands::update_preset_session_durations,
             commands::get_last_crash,

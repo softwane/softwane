@@ -8,12 +8,10 @@ use tauri::{
 };
 
 use crate::{
-    engine::EngineHandle,
-    commands::get_preset_session_durations,
-    engine::commands::{EngineEvent, ProgressPayload, forward_engine_sync},
-    timer_state_machine::commands::StateCommand,
+    engine::{EngineHandle, EngineEvent, ProgressPayload},
+    timer_state_machine::{TimerState, commands::StateCommand},
     state::SharedTimerState,
-    timer_state_machine::TimerState,
+    commands::get_preset_session_durations,
     window::{WindowCommands, open_main_window, toggle_main_window_sync},
 };
 
@@ -63,7 +61,12 @@ fn build_tray(app: &AppHandle, phase_label: &str, durations: [u64; 3]) -> tauri:
                     "force_reset" => EngineEvent::ForceReset,
                     _ => return,
                 };
-                forward_engine_sync(app.state::<EngineHandle>().tx.clone(), event);
+                let tx = app.state::<EngineHandle>().tx.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = tx.send(event).await {
+                        tracing::error!("Tray failed to forward engine event: {err:?}.");
+                    }
+                });
             }
         }})
         .show_menu_on_left_click(false)

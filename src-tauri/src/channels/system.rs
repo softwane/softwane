@@ -1,8 +1,10 @@
 //! B5: `SensoryChannelsSystem` — the wrapper that owns the full channel array,
 //! now with store-backed persistence.
 
-use crate::engine::FrameEvents;
-use crate::timer_state_machine::TimerState;
+use crate::{
+    engine::FrameEvents,
+    timer_state_machine::TimerState,
+};
 use super::commands::ChannelCommand;
 use super::*;
 

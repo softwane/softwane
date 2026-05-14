@@ -34,13 +34,13 @@ use tauri_plugin_global_shortcut::{
 use tauri_plugin_store::StoreExt;
 use thiserror::Error;
 
-use crate::engine::EngineHandle;
-use crate::commands::{CommandError, get_preset_session_durations};
-use crate::engine::commands::{EngineEvent, forward_engine_sync};
-use crate::timer_state_machine::commands::StateCommand;
-use crate::state::SharedTimerState;
-use crate::timer_state_machine::TimerState;
-use crate::window::{WindowCommands, toggle_main_window_sync};
+use crate::{
+    engine::{EngineHandle, EngineEvent},
+    timer_state_machine::{TimerState, commands::StateCommand},
+    state::SharedTimerState,
+    commands::{CommandError, get_preset_session_durations},
+    window::{WindowCommands, toggle_main_window_sync},
+};
 
 pub const STORE_KEY_SHORTCUT_BINDINGS: &str = "shortcut_bindings";
 
@@ -390,7 +390,12 @@ fn handle_action(app: &AppHandle, action: ShortcutAction) {
             return;
         }
     };
-    forward_engine_sync(app.state::<EngineHandle>().tx.clone(), event);
+    let tx = app.state::<EngineHandle>().tx.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(err) = tx.send(event).await {
+            tracing::error!("Shortcuts failed to forward engine event: {err:?}.");
+        }
+    });
 }
 
 fn start_preset_event(app: &AppHandle, idx: usize) -> EngineEvent {
