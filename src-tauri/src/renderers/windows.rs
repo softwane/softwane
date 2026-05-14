@@ -14,6 +14,16 @@ use crate::{
 };
 use super::win_mag_api_color_transformer::WinMagAPIColorTransformer;
 
+impl ChannelType {
+    pub const fn conflicts(&self) -> &'static [ChannelType] {
+        match self {
+            Self::Brightness => &[],
+            Self::ColorTemp => &[],
+            Self::Saturation => &[],
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct WindowsRendererDispatcher {
     tx: Sender<EngineEvent>,

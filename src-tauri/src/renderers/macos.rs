@@ -17,6 +17,16 @@ use super::{
     mac_core_graphics_gamma_tweaker::CoreGraphicsGammaTweaker,
 };
 
+impl ChannelType {
+    pub const fn conflicts(&self) -> &'static [ChannelType] {
+        match self {
+            Self::Brightness => &[Self::Saturation],
+            Self::ColorTemp => &[Self::Saturation],
+            Self::Saturation => &[Self::Brightness, Self::ColorTemp],
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct MacOSRendererDispatcher {
     tx: Sender<EngineEvent>,
