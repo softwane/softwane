@@ -30,7 +30,7 @@ use crate::{
 };
 use super::{
     events::RendererEvent,
-    utils::kelvin_to_rgb,
+    utils::color_temperature_to_rgb,
 };
 
 // ---------------------------------------------------------------------------
@@ -148,7 +148,7 @@ impl CoreGraphicsGammaTweaker {
         };
 
         // ── 4. Compute per-channel multipliers ────────────────────
-        let (r, g, b) = kelvin_to_rgb(ct_kelvin);
+        let (r, g, b) = color_temperature_to_rgb(ct_kelvin);
         let r_scale = (r * br) as CGGammaValue;
         let g_scale = (g * br) as CGGammaValue;
         let b_scale = (b * br) as CGGammaValue;
