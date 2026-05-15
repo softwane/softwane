@@ -43,8 +43,10 @@ export const updateReverseDuration = (durationMs: number) =>
 export const toggleChannelSwitch = (channelType: ChannelType, switchOn: boolean) =>
   commandEngine({ category: "channel", content: { command: "toggle_switch", channel_type: channelType, switch_on: switchOn } });
 
-export const updateTargetChannelValue = (targetChannelValue: ChannelValue) =>
+export const updateTargetChannelValue = (targetChannelValue: ChannelValue) => {
   commandEngineNowait({ category: "channel", content: { command: "update_target_channel_value", target_channel_value: targetChannelValue } });
+  console.log(targetChannelValue);
+}
 
 export const updateProgressBeginRatio = (channelType: ChannelType, progressBeginRatio: number) =>
   commandEngineNowait({ category: "channel", content: { command: "update_progress_begin_ratio", channel_type: channelType, progress_begin_ratio: progressBeginRatio } });

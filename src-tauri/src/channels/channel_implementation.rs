@@ -32,7 +32,7 @@ impl SensoryChannel {
             state_params_table: StateParamsTable::new(
                 &config.persistent_state_params_table,
             ),
-            current: Update::Changed(channel_type.neutral_value()),
+            current: Update::Unchanged(channel_type.neutral_value()),
         }
     }
 

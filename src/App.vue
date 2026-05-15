@@ -68,11 +68,9 @@ function findChannelConfig(type) {
 function getChannelTargetValueDisplay(type, cfg) {
   if (!cfg) return 0;
   const tv = cfg.persistent_state_params_table.target_channel_value;
-  if (type === "saturation" && tv.type === "saturation") return tv.data;
-  if (type === "color_temp" && tv.type === "color_temp_kelvin") return tv.data;
-  if (type === "brightness" && tv.type === "brightness") return tv.data;
-  if (type === "color_temp") return 6500;
-  if (type === "brightness") return 1;
+  if (type === "saturation") return tv.data ?? 0;
+  if (type === "color_temp") return tv.data ?? 6500;
+  if (type === "brightness") return tv.data ?? 1;
   return 0;
 }
 
@@ -92,6 +90,12 @@ function onChannelTargetChange(type, value) {
   if (type === "saturation") updateChannelTargetValue(type, { type: "saturation", data: num });
   else if (type === "color_temp") updateChannelTargetValue(type, { type: "color_temp_kelvin", data: Math.round(num) });
   else if (type === "brightness") updateChannelTargetValue(type, { type: "brightness", data: num });
+}
+
+function detectMacOS() {
+  if (typeof navigator === "undefined") return false;
+  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  return /mac/i.test(platform);
 }
 
 // ── Derived from state ────────────────────────────────────────────────
