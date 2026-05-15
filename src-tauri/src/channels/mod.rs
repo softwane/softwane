@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::utils::Update;
 
 define_channels!(
-    Saturation(default_on=true,  persist_key="saturation")
+    Saturation(default_on=false, persist_key="saturation")
         => Saturation(f64, neutral=1.0, default_target=0.2);
     ColorTemp(default_on=true,   persist_key="color_temp")
         => ColorTempKelvin(u32, neutral=6500, default_target=2500);

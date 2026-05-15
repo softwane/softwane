@@ -715,38 +715,6 @@ button {
   color: var(--muted);
 }
 
-.channel-conflict-log {
-  position: fixed;
-  left: 50%;
-  bottom: 24px;
-  z-index: 40;
-  width: min(calc(100vw - 32px), 420px);
-  margin: 0;
-  padding: 10px 14px;
-  transform: translateX(-50%);
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
-  box-shadow: var(--panel-shadow);
-  color: var(--text);
-  font-size: 12px;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.channel-log-enter-active,
-.channel-log-leave-active {
-  transition:
-    opacity 180ms var(--motion-soft),
-    transform 180ms var(--motion-soft);
-}
-
-.channel-log-enter-from,
-.channel-log-leave-to {
-  opacity: 0;
-  transform: translate(-50%, 8px);
-}
-
 @media (max-width: 460px) {
   .topbar {
     flex-wrap: wrap;
@@ -797,6 +765,39 @@ button {
   color: var(--field-error);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.startup-toggle-list {
+  display: grid;
+  gap: 8px;
+}
+
+.startup-toggle {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  cursor: pointer;
+}
+
+.startup-toggle input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.startup-toggle span {
+  display: grid;
+  gap: 4px;
+}
+
+.startup-toggle strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.startup-toggle small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 /* ── Shortcut list ─────────────────────────────────────────────────── */

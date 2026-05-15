@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import softwaneMark from "./assets/softwane-mark.svg";
 import { useAppearance } from "./composables/useAppearance";
 import { useDraft } from "./composables/useDraft";
@@ -11,6 +11,9 @@ import {
   channelConfigs,
   timerConfig,
   presetDurations,
+  autostartEnabled,
+  silentStart,
+  configMutationError,
   shortcutBindings,
   timerState,
   epoch,
@@ -30,6 +33,9 @@ import {
   updateChannelProgressBeginRatio,
   updateChannelTargetValue,
   updateChannelCurveParams,
+  setAutostart,
+  setSilentStart,
+  clearConfigMutationError,
 } from "./state/engineState";
 
 const isSettingsOpen = ref(false);
@@ -53,9 +59,11 @@ function findChannelConfig(type) {
 function getChannelTargetValueDisplay(type, cfg) {
   if (!cfg) return 0;
   const tv = cfg.persistent_state_params_table.target_channel_value;
-  if (type === "saturation") return tv.saturation ?? 0;
-  if (type === "color_temp") return tv.color_temp_kelvin ?? 6500;
-  if (type === "brightness") return tv.brightness ?? 1;
+  if (type === "saturation" && tv.type === "saturation") return tv.data;
+  if (type === "color_temp" && tv.type === "color_temp_kelvin") return tv.data;
+  if (type === "brightness" && tv.type === "brightness") return tv.data;
+  if (type === "color_temp") return 6500;
+  if (type === "brightness") return 1;
   return 0;
 }
 
@@ -72,15 +80,9 @@ function getChannelBeginRatio(type) {
 
 function onChannelTargetChange(type, value) {
   const num = Number(value);
-  if (type === "saturation") updateChannelTargetValue(type, { saturation: num });
-  else if (type === "color_temp") updateChannelTargetValue(type, { color_temp_kelvin: Math.round(num) });
-  else if (type === "brightness") updateChannelTargetValue(type, { brightness: num });
-}
-
-function detectMacOS() {
-  if (typeof navigator === "undefined") return false;
-  const platform = navigator.userAgentData?.platform || navigator.platform || "";
-  return /mac/i.test(platform);
+  if (type === "saturation") updateChannelTargetValue(type, { type: "saturation", data: num });
+  else if (type === "color_temp") updateChannelTargetValue(type, { type: "color_temp_kelvin", data: Math.round(num) });
+  else if (type === "brightness") updateChannelTargetValue(type, { type: "brightness", data: num });
 }
 
 // ── Derived from state ────────────────────────────────────────────────
@@ -178,22 +180,9 @@ const canTakeBreak = computed(() => isProgress.value);
 const canStop = computed(() => isProgress.value || isSettling.value || isRest.value);
 const canStartNewSession = computed(() => isIdle.value);
 const isStartLayerOpen = ref(false);
-const isMacOS = detectMacOS();
-const channelConflictLog = ref("");
-let channelConflictLogTimer = 0;
 
 function hasChannel(type) { return channelConfigs.value.some(([t]) => t === type); }
 function channelLabel(type) { return type === "color_temp" ? "Warmth" : type.charAt(0).toUpperCase() + type.slice(1); }
-
-function showChannelConflictLog(disabledTypes) {
-  if (!disabledTypes.length) return;
-  const disabledLabels = disabledTypes.map(channelLabel).join(" and ");
-  channelConflictLog.value = `macOS: turned off ${disabledLabels} because Saturation is exclusive.`;
-  window.clearTimeout(channelConflictLogTimer);
-  channelConflictLogTimer = window.setTimeout(() => {
-    channelConflictLog.value = "";
-  }, 2600);
-}
 
 function openStartLayer() {
   isStartLayerOpen.value = true;
@@ -206,29 +195,11 @@ function onStartSession() {
 }
 
 function onToggleChannel(type, checked) {
-  const disabledTypes = [];
-  if (isMacOS && checked) {
-    if (type === "saturation") {
-      if (channelEnabled.value.color_temp) {
-        toggleChannel("color_temp", false);
-        disabledTypes.push("color_temp");
-      }
-      if (channelEnabled.value.brightness) {
-        toggleChannel("brightness", false);
-        disabledTypes.push("brightness");
-      }
-    } else if (type === "color_temp" || type === "brightness") {
-      if (channelEnabled.value.saturation) {
-        toggleChannel("saturation", false);
-        disabledTypes.push("saturation");
-      }
-    }
-  }
   toggleChannel(type, checked);
-  showChannelConflictLog(disabledTypes);
 }
 
 async function onOpenSettings() {
+  clearConfigMutationError();
   await refreshConfig();
   isSettingsOpen.value = true;
 }
@@ -350,7 +321,6 @@ function onShortcutCancel() {
 // ── Lifecycle ─────────────────────────────────────────────────────────
 
 onMounted(() => { init(); });
-onUnmounted(() => { window.clearTimeout(channelConflictLogTimer); });
 </script>
 
 <template>
@@ -419,6 +389,7 @@ onUnmounted(() => { window.clearTimeout(channelConflictLogTimer); });
         </header>
 
         <!-- Per-channel config -->
+        <p v-if="configMutationError" class="settings-error" role="status">{{ configMutationError }}</p>
         <div class="channel-settings-list">
           <template v-for="[type] in channelConfigs" :key="type">
             <div class="channel-setting-card">
@@ -532,10 +503,30 @@ onUnmounted(() => { window.clearTimeout(channelConflictLogTimer); });
             </button>
           </div>
         </section>
+
+        <!-- Startup -->
+        <section class="settings-group">
+          <div class="settings-group-header">
+            <span class="settings-group-title">Startup</span>
+          </div>
+          <div class="startup-toggle-list">
+            <label class="field startup-toggle">
+              <input type="checkbox" :checked="autostartEnabled" @change="setAutostart($event.target.checked)" />
+              <span>
+                <strong>Launch at login</strong>
+                <small>Start Softwane when the system signs in.</small>
+              </span>
+            </label>
+            <label class="field startup-toggle">
+              <input type="checkbox" :checked="silentStart" @change="setSilentStart($event.target.checked)" />
+              <span>
+                <strong>Silent start</strong>
+                <small>Keep the main window hidden when Softwane starts.</small>
+              </span>
+            </label>
+          </div>
+        </section>
       </div>
     </section>
-    <Transition name="channel-log">
-      <p v-if="channelConflictLog" class="channel-conflict-log" role="status">{{ channelConflictLog }}</p>
-    </Transition>
   </main>
 </template>

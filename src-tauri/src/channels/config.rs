@@ -130,10 +130,12 @@ pub fn load_channel_config(store: &Store<Wry>, channel_type: ChannelType) -> Cha
 }
 
 pub fn load_channel_config_array(store: &Store<Wry>) -> ChannelConfigArray {
-    std::array::from_fn(|i| {
+    let mut configs = std::array::from_fn(|i| {
         let channel_type = SENSORY_CHANNEL_TYPES[i];
         load_channel_config(store, channel_type)
-    })
+    });
+    normalize_channel_switch_conflicts(&mut configs, store);
+    configs
 }
 
 /// Persist a single channel's config. Called by the Engine after
@@ -156,4 +158,21 @@ pub fn store_defaults() -> Vec<(String, serde_json::Value)> {
             )
         })
         .collect()
+}
+
+fn normalize_channel_switch_conflicts(configs: &mut ChannelConfigArray, store: &Store<Wry>) {
+    for channel_type in SENSORY_CHANNEL_TYPES {
+        if !configs[channel_type].switch_on {
+            continue;
+        }
+
+        for conflict in channel_type.conflicts() {
+            if configs[*conflict].switch_on {
+                configs[*conflict].switch_on = false;
+                let value = serde_json::to_value(configs[*conflict])
+                    .expect("ChannelConfig serialization is infallible");
+                store.set(conflict.store_key(), value);
+            }
+        }
+    }
 }
