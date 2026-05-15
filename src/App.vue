@@ -53,9 +53,9 @@ function findChannelConfig(type) {
 function getChannelTargetValueDisplay(type, cfg) {
   if (!cfg) return 0;
   const tv = cfg.persistent_state_params_table.target_channel_value;
-  if (type === "saturation") return tv.saturation ?? 0;
-  if (type === "color_temp") return tv.color_temp_kelvin ?? 6500;
-  if (type === "brightness") return tv.brightness ?? 1;
+  if (type === "saturation") return tv.data ?? 0;
+  if (type === "color_temp") return tv.data ?? 6500;
+  if (type === "brightness") return tv.data ?? 1;
   return 0;
 }
 
@@ -72,9 +72,9 @@ function getChannelBeginRatio(type) {
 
 function onChannelTargetChange(type, value) {
   const num = Number(value);
-  if (type === "saturation") updateChannelTargetValue(type, { saturation: num });
-  else if (type === "color_temp") updateChannelTargetValue(type, { color_temp_kelvin: Math.round(num) });
-  else if (type === "brightness") updateChannelTargetValue(type, { brightness: num });
+  if (type === "saturation") updateChannelTargetValue(type, { type: "saturation", data: num });
+  else if (type === "color_temp") updateChannelTargetValue(type, { type: "color_temp_kelvin", data: Math.round(num) });
+  else if (type === "brightness") updateChannelTargetValue(type, { type: "brightness", data: num });
 }
 
 function detectMacOS() {

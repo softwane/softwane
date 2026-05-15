@@ -87,6 +87,7 @@ pub fn command_engine_nowait(
             EngineEvent::Progress(inner_command)
         },
     };
+    tracing::debug!("forward_engine_nowait: Sending command: {event:?}");
     match app.state::<EngineHandle>().tx.try_send(event) {
         Ok(_) => Ok(()),
         Err(TrySendError::Closed(event)) => {
