@@ -42,13 +42,19 @@ const isSettingsOpen = ref(false);
 const workMinutes = ref(50);
 const expandedChannelSettings = ref({});
 const isShortcutSectionOpen = ref(false);
+const channelCompatibilityNotice = ref("");
+let channelCompatibilityNoticeTimer = 0;
 
 const themeModeOptions = [
   { id: "auto", label: "Auto", description: "Follow the system appearance and switch live." },
   { id: "dark", label: "Dark", description: "Always keep the app in dark mode." },
   { id: "light", label: "Light", description: "Always keep the app in light mode." },
 ];
-const channelCompatibilityText = "Saturation cannot run together with Warmth or Brightness on macOS. Turning one on may turn the other mode off.";
+const channelConflicts = {
+  saturation: ["color_temp", "brightness"],
+  color_temp: ["saturation"],
+  brightness: ["saturation"],
+};
 
 const { resolvedTheme, setThemeMode, themeMode } = useAppearance();
 
@@ -195,6 +201,20 @@ const cueSummaryText = computed(() => {
 function hasChannel(type) { return channelConfigs.value.some(([t]) => t === type); }
 function channelLabel(type) { return type === "color_temp" ? "Warmth" : type.charAt(0).toUpperCase() + type.slice(1); }
 
+function clearChannelCompatibilityNotice() {
+  window.clearTimeout(channelCompatibilityNoticeTimer);
+  channelCompatibilityNotice.value = "";
+}
+
+function showChannelCompatibilityNotice(turnedOffTypes, enabledType) {
+  window.clearTimeout(channelCompatibilityNoticeTimer);
+  const names = turnedOffTypes.map(channelLabel).join(" and ");
+  channelCompatibilityNotice.value = `${names} turned off because it cannot run with ${channelLabel(enabledType)} on macOS.`;
+  channelCompatibilityNoticeTimer = window.setTimeout(() => {
+    channelCompatibilityNotice.value = "";
+  }, 4200);
+}
+
 function channelDescription(type) {
   if (type === "saturation") return "Softens color as the session approaches its end.";
   if (type === "color_temp") return "Warms the display into a sunset-like tone.";
@@ -240,17 +260,37 @@ function toggleChannelDetails(type) {
 }
 
 function openStartLayer() {
+  const preferredDuration = presetDurations.value[1] ?? presetDurations.value[0];
+  if (preferredDuration) workMinutes.value = Math.round(preferredDuration / 60_000);
   isStartLayerOpen.value = true;
 }
 
-function onStartSession() {
-  const ms = Math.max(1, Math.min(120, Number(workMinutes.value) || 50)) * 60_000;
-  startSession(ms);
+function closeStartLayer() {
   isStartLayerOpen.value = false;
 }
 
-function onToggleChannel(type, checked) {
-  toggleChannel(type, checked);
+function onStartPreset(durationMs) {
+  workMinutes.value = Math.round(durationMs / 60_000);
+  startSession(durationMs);
+  closeStartLayer();
+}
+
+function onStartSession() {
+  const ms = customStartMinutes.value * 60_000;
+  startSession(ms);
+  closeStartLayer();
+}
+
+async function onToggleChannel(type, checked) {
+  const turnedOffTypes = checked
+    ? (channelConflicts[type] ?? []).filter((conflict) => channelEnabled.value[conflict])
+    : [];
+  const updated = await toggleChannel(type, checked);
+  if (updated && turnedOffTypes.length > 0) {
+    showChannelCompatibilityNotice(turnedOffTypes, type);
+  } else if (turnedOffTypes.length === 0) {
+    clearChannelCompatibilityNotice();
+  }
 }
 
 async function onOpenSettings() {
@@ -268,6 +308,14 @@ const presetDraft = useDraft(presetDurations, async (d) => {
 });
 const presetSaveError = ref("");
 const presetSummaryText = computed(() => presetDraft.draft.value.map(formatMinutes).join(" / "));
+const startPresetOptions = computed(() => presetDurations.value.map((durationMs, index) => ({
+  id: `preset-${index + 1}`,
+  index,
+  durationMs,
+  minutes: Math.round(durationMs / 60_000),
+})));
+const customStartMinutes = computed(() => Math.max(1, Math.min(120, Number(workMinutes.value) || 50)));
+const customStartLabel = computed(() => `Start ${customStartMinutes.value} min`);
 
 function onDraftDurationChange(index, value) {
   const v = Math.max(60_000, Number(value) * 60_000 || 60_000);
@@ -414,15 +462,28 @@ onMounted(() => { init(); });
     </section>
 
     <!-- Start layer (for inputting next session's target duration) -->
-    <section :class="['settings-layer', 'start-layer', { 'is-active': isStartLayerOpen && isIdle }]" role="dialog" :aria-hidden="!isIdle" aria-label="Start timer">
+    <section :class="['settings-layer', 'start-layer', { 'is-active': isStartLayerOpen && isIdle }]" role="dialog" :aria-hidden="!(isStartLayerOpen && isIdle)" aria-label="Start timer" @click.self="closeStartLayer">
       <div class="settings-sheet">
         <header class="settings-header">
-          <div><p class="settings-kicker">Start timer</p><h2 class="settings-title">Set this session first</h2></div>
+          <div><p class="settings-kicker">Start timer</p><h2 class="settings-title">Choose a session</h2></div>
+          <button class="icon-button" type="button" aria-label="Close start timer" @click="closeStartLayer">&times;</button>
         </header>
+        <div class="start-preset-list" aria-label="Quick start durations">
+          <button
+            v-for="option in startPresetOptions"
+            :key="option.id"
+            class="start-preset-button"
+            type="button"
+            @click="onStartPreset(option.durationMs)"
+          >
+            <strong>{{ option.minutes }}</strong>
+            <span>min</span>
+          </button>
+        </div>
         <div class="field-grid">
           <label class="field">
-            <span>Work time</span>
-            <div class="input-with-unit"><input v-model.number="workMinutes" type="number" max="120" step="1" /><span class="input-unit">min</span></div>
+            <span>Custom time</span>
+            <div class="input-with-unit"><input v-model.number="workMinutes" type="number" min="1" max="120" step="1" /><span class="input-unit">min</span></div>
           </label>
         </div>
         <div class="channel-toggles">
@@ -436,8 +497,11 @@ onMounted(() => { init(); });
             <input type="checkbox" :checked="channelEnabled.brightness" @change="onToggleChannel('brightness', $event.target.checked)" /><span>Brightness</span>
           </label>
         </div>
-        <p v-if="hasChannel('saturation')" class="compatibility-note">{{ channelCompatibilityText }}</p>
-        <button class="start-button" type="button" @click="onStartSession">Start session</button>
+        <p v-if="channelCompatibilityNotice" class="compatibility-note" role="status">{{ channelCompatibilityNotice }}</p>
+        <div class="start-actions">
+          <button class="ghost-button" type="button" @click="closeStartLayer">Cancel</button>
+          <button class="start-button" type="button" @click="onStartSession">{{ customStartLabel }}</button>
+        </div>
       </div>
     </section>
 
@@ -494,7 +558,7 @@ onMounted(() => { init(); });
             </div>
           </div>
 
-          <p v-if="hasChannel('saturation')" class="compatibility-note">{{ channelCompatibilityText }}</p>
+          <p v-if="channelCompatibilityNotice" class="compatibility-note" role="status">{{ channelCompatibilityNotice }}</p>
 
           <div class="channel-settings-list">
             <article v-for="[type] in channelConfigs" :key="type" :class="['channel-setting-card', { 'is-disabled': !channelEnabled[type] }]">

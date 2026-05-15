@@ -523,6 +523,57 @@ button {
   text-transform: capitalize;
 }
 
+.start-preset-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.start-preset-button {
+  min-width: 0;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  transition:
+    background var(--motion-button-ms) var(--motion-soft),
+    border-color var(--motion-button-ms) var(--motion-soft),
+    transform var(--motion-button-ms) var(--motion-soft);
+}
+
+.start-preset-button:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  background: var(--card-active);
+}
+
+.start-preset-button:focus-visible {
+  outline: 2px solid var(--field-accent);
+  outline-offset: 3px;
+}
+
+.start-preset-button strong {
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.start-preset-button span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -579,6 +630,13 @@ button {
 .start-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.start-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 
 .cue-style-list {
@@ -745,7 +803,8 @@ button {
   }
 
   .settings-summary,
-  .preset-duration-grid {
+  .preset-duration-grid,
+  .start-preset-list {
     grid-template-columns: 1fr;
   }
 
@@ -784,6 +843,14 @@ button {
 
   .preset-row {
     flex-wrap: wrap;
+  }
+
+  .start-actions {
+    justify-content: stretch;
+  }
+
+  .start-actions > button {
+    flex: 1;
   }
 }
 

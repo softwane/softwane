@@ -53,9 +53,9 @@ fn build_tray(app: &AppHandle, phase_label: &str, durations: [u64; 3]) -> tauri:
             },
             other => {
                 let event = match other {
-                    "start_preset1" => EngineEvent::State(StateCommand::StartSession{ target_duration_ms: durations[0] }),
-                    "start_preset2" => EngineEvent::State(StateCommand::StartSession{ target_duration_ms: durations[1] }),
-                    "start_preset3" => EngineEvent::State(StateCommand::StartSession{ target_duration_ms: durations[2] }),
+                    "start_preset1" => start_preset_event(app, 0),
+                    "start_preset2" => start_preset_event(app, 1),
+                    "start_preset3" => start_preset_event(app, 2),
                     "take_break_now" => EngineEvent::State(StateCommand::TakeBreakNow),
                     "stop" => EngineEvent::State(StateCommand::StopSession),
                     "force_reset" => EngineEvent::ForceReset,
@@ -126,6 +126,13 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str, durations: [u64
         ],
     )?;
     Ok(menu)
+}
+
+fn start_preset_event(app: &AppHandle, idx: usize) -> EngineEvent {
+    let durations = get_preset_session_durations(app.clone());
+    EngineEvent::State(StateCommand::StartSession {
+        target_duration_ms: durations[idx],
+    })
 }
 
 pub fn notify_crash(app: &AppHandle) {

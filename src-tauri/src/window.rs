@@ -16,7 +16,7 @@ pub async fn open_main_window<R: Runtime>(app_handle: AppHandle<R>) -> Result<()
                 WebviewUrl::App("index.html".into()),
             )
             .title("Softwane")
-            .inner_size(560.0, 420.0)
+            .inner_size(560.0, 470.0)
             .resizable(true)
             // .min_inner_size(480.0, 380.0)   // 除非明确需要，不限制窗口大小，最讨厌不能自定义窗口形状的应用
             .visible(false) 
