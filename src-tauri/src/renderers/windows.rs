@@ -46,12 +46,12 @@ impl WindowsRendererDispatcher {
 
     // TODO:track color transformer's state, if it doesn't excuted cuz the main thread is stuck, send event
     pub fn dispatch(&mut self, logic_frame: Arc<LogicFrame>, app: &AppHandle) {
-        let saturation = logic_frame[ChannelType::Saturation];
         let color_temperature = logic_frame[ChannelType::ColorTemp];
+        let saturation = logic_frame[ChannelType::Saturation];
         let brightness = logic_frame[ChannelType::Brightness];
         self.color_transformer.render(
-            saturation,
             color_temperature,
+            saturation,
             brightness,
             app,
             self.tx.clone(),

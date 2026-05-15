@@ -22,6 +22,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use nalgebra::Matrix5;
 use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
@@ -32,13 +33,12 @@ use crate::{
 };
 use super::{
     events::RendererEvent,
-    utils::{ColorTransformMatrix, kelvin_to_rgb},
+    utils::{tsb_to_ct_matrix3},
 };
 
 #[derive(Debug, Clone)]
 pub(super) struct WinMagAPIColorTransformer {
     name: &'static str,
-    cached_matrix: Update<ColorTransformMatrix>,
     magnification_initialized: Arc<AtomicBool>,
 }
 
@@ -46,7 +46,6 @@ impl Default for WinMagAPIColorTransformer {
     fn default() -> Self {
         Self {
             name: "Windows-MagnificationAPI-Color-Transformer",
-            cached_matrix: Update::Changed(ColorTransformMatrix::identity()),
             magnification_initialized: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -62,15 +61,12 @@ impl WinMagAPIColorTransformer {
 impl WinMagAPIColorTransformer {
     pub(super) fn render(
         &mut self,
-        saturation: Update<ChannelValue>,
         color_temperature: Update<ChannelValue>,
+        saturation: Update<ChannelValue>,
         brightness: Update<ChannelValue>,
         app: &AppHandle,
         tx: Sender<EngineEvent>,
     ) {
-
-        self.update_cached_matrix(saturation, color_temperature, brightness);
-        
         if !self.magnification_initialized.load(Ordering::Acquire) {
             let _ = tx.try_send(EngineEvent::Renderer(
                 RendererEvent::RenderUnappliedDueToNotStartupped {
@@ -79,16 +75,26 @@ impl WinMagAPIColorTransformer {
             ));
             return;
         }
-        match self.cached_matrix {
-            Update::Changed(_) => self.apply_matrix(app, tx),
-            Update::Unchanged(_) => {
-                let _ = tx.try_send(EngineEvent::Renderer(
-                    RendererEvent::RenderUnappliedDueToUnchanged {
-                        renderer_name: self.name,
-                    },
-                ));
-            }
+        
+        if !color_temperature.is_changed()
+            && !saturation.is_changed()
+            && !brightness.is_changed()
+        {
+            let _ = tx.try_send(EngineEvent::Renderer(
+                RendererEvent::RenderUnappliedDueToUnchanged {
+                    renderer_name: self.name,
+                },
+            ));
+            return;
         }
+
+        let matrix = self.calculate_matrix(
+            *color_temperature.get_value(),
+            *saturation.get_value(),
+            *brightness.get_value(),
+        );
+
+        self.apply_matrix(app, tx, &matrix);
     }
 
     pub(super) fn startup(&mut self, app: &AppHandle, tx: Sender<EngineEvent>) {
@@ -96,13 +102,12 @@ impl WinMagAPIColorTransformer {
             return;
         }
 
-        // Reset cached matrix so the next render forces recomputation + dispatch.
-        self.cached_matrix = Update::Changed(ColorTransformMatrix::identity());
-
         // Optimistically set — init closure will roll back on failure.
         self.magnification_initialized.store(true, Ordering::Release);
+        self.init_api(app, tx.clone());
 
-        self.init_api(app, tx);
+        let identity = Matrix5::identity();
+        self.apply_matrix(app, tx, &identity);
     }
 
     /// Shutdown sequence (on the engine thread):
@@ -120,8 +125,8 @@ impl WinMagAPIColorTransformer {
             return;
         }
 
-        self.cached_matrix = Update::Changed(ColorTransformMatrix::identity());
-        self.apply_matrix(app, tx.clone());
+        let identity = Matrix5::identity();
+        self.apply_matrix(app, tx.clone(), &identity);
 
         self.uninit_api(app, tx);
         self.magnification_initialized.store(false, Ordering::Release);
@@ -169,10 +174,10 @@ impl WinMagAPIColorTransformer {
     /// if the init closure failed and rolled back `initialized`, any
     /// already-queued apply closure skips with
     /// [`RenderUnappliedDueToNotInitialized`].
-    fn apply_matrix(&self, app: &AppHandle, tx: Sender<EngineEvent>) {
+    fn apply_matrix(&self, app: &AppHandle, tx: Sender<EngineEvent>, matrix: &Matrix5<f64>) {
         let name = self.name;
         let initialized = Arc::clone(&self.magnification_initialized);
-        let matrix_f32 = self.cached_matrix.get_value().cast().into();
+        let matrix_f32 = matrix.cast().into();
 
         let dispatch = app.run_on_main_thread(move || {
             if !initialized.load(Ordering::Acquire) {
@@ -237,68 +242,33 @@ impl WinMagAPIColorTransformer {
     }
 }
 
-// ── Private helpers ──────────────────────────────────────────────────
+// ── Calculation ──────────────────────────────────────────────────
 
 impl WinMagAPIColorTransformer {
-    fn update_cached_matrix(
-        &mut self,
-        saturation: Update<ChannelValue>,
-        color_temperature: Update<ChannelValue>,
-        brightness: Update<ChannelValue>,
-    ) {
-        if !saturation.is_changed()
-            && !color_temperature.is_changed()
-            && !brightness.is_changed()
-        {
-            self.cached_matrix =
-                Update::Unchanged(*self.cached_matrix.get_value());
-            return;
-        }
-
-        let s = match saturation.get_value() {
-            ChannelValue::Saturation(s) => *s,
-            _ => panic!("Invalid ChannelValue when update_cached_matrix. Expect Saturation, but get: {saturation:?}."),
+    /// Compute a 5×5 colour-transform matrix from channel values.
+    ///
+    /// Calls `tsb_to_ct_matrix3` in [`utils`](super::utils) for the
+    /// 3×3 colour portion, then embeds it into the top-left corner of a
+    /// 5×5 identity matrix (rows 3–4 are pass-through for alpha / unused
+    /// channels required by the Magnification API).
+    fn calculate_matrix(&self, color_temperature: ChannelValue, saturation: ChannelValue, brightness: ChannelValue) -> Matrix5<f64> {
+        let ct_kelvin = match color_temperature {
+            ChannelValue::ColorTempKelvin(t) => t,
+            _ => panic!("Invalid ChannelValue when calculate_matrix. Expect Color Temperature, but get: {color_temperature:?}."),
         };
-        let ct_kelvin = match color_temperature.get_value() {
-            ChannelValue::ColorTempKelvin(t) => *t,
-            _ => panic!("Invalid ChannelValue when update_cached_matrix. Expect ColorTempKelvin, but get: {color_temperature:?}."),
+        let s = match saturation {
+            ChannelValue::Saturation(s) => s,
+            _ => panic!("Invalid ChannelValue when calculate_matrix. Expect Saturation, but get: {saturation:?}."),
         };
-        let br = match brightness.get_value() {
-            ChannelValue::Brightness(b) => *b,
-            _ => panic!("Invalid ChannelValue when update_cached_matrix. Expect Brightness, but get: {brightness:?}."),
+        let br = match brightness {
+            ChannelValue::Brightness(b) => b,
+            _ => panic!("Invalid ChannelValue when calculate_matrix. Expect Brightness, but get: {brightness:?}."),
         };
-
-        let saturation_matrix = Self::saturation_to_matrix(s);
-
-        let (r, g, b) = kelvin_to_rgb(ct_kelvin);
-        let rgb_brightness_matrix = ColorTransformMatrix::new(
-            r * br, 0.0,    0.0,    0.0,    0.0,
-            0.0,    g * br, 0.0,    0.0,    0.0,
-            0.0,    0.0,    b * br, 0.0,    0.0,
-            0.0,    0.0,    0.0,    1.0,    0.0,
-            0.0,    0.0,    0.0,    0.0,    1.0,
-        );
-
-        let result = rgb_brightness_matrix * saturation_matrix;
-        self.cached_matrix = Update::Changed(result);
-    }
-
-    // ── Matrix helpers ────────────────────────────────────────────────
-
-    fn saturation_to_matrix(s: f64) -> ColorTransformMatrix {
-        const LR: f64 = 0.2126;
-        const LG: f64 = 0.7152;
-        const LB: f64 = 0.0722;
-
-        const GRAYSCALE: ColorTransformMatrix = ColorTransformMatrix::new(
-            LR,  LG,  LB,  0.0, 0.0,
-            LR,  LG,  LB,  0.0, 0.0,
-            LR,  LG,  LB,  0.0, 0.0,
-            0.0, 0.0, 0.0, 1.0, 0.0,
-            0.0, 0.0, 0.0, 0.0, 1.0,
-        );
-
-        GRAYSCALE * (1.0 - s) + ColorTransformMatrix::identity() * s
+        
+        let m3 = tsb_to_ct_matrix3(ct_kelvin, s, br);
+        let mut m5 = Matrix5::identity();
+        m5.fixed_view_mut::<3, 3>(0, 0).copy_from(&m3);
+        m5
     }
 }
 
@@ -324,53 +294,13 @@ mod tests {
     use crate::channels::ChannelType;
 
     #[test]
-    fn saturation_matrix_at_one_is_identity() {
-        let m = WinMagAPIColorTransformer::saturation_to_matrix(1.0);
-        let diff = (m - ColorTransformMatrix::identity()).abs();
-        assert!(diff.max() < 1e-10);
-    }
-
-    #[test]
-    fn saturation_matrix_at_zero_all_rgb_rows_equal() {
-        let m = WinMagAPIColorTransformer::saturation_to_matrix(0.0);
-        for col in 0..3 {
-            assert!((m[(0, col)] - m[(1, col)]).abs() < 1e-10);
-            assert!((m[(1, col)] - m[(2, col)]).abs() < 1e-10);
-        }
-        assert!((m[(3, 3)] - 1.0).abs() < 1e-10);
-        assert!((m[(4, 4)] - 1.0).abs() < 1e-10);
-    }
-
-    #[test]
-    fn all_unchanged_preserves_and_untags_cached() {
-        let mut t = WinMagAPIColorTransformer::default();
-        t.update_cached_matrix(
-            Update::Changed(ChannelValue::Saturation(0.5)),
-            Update::Changed(ChannelValue::ColorTempKelvin(3000)),
-            Update::Changed(ChannelValue::Brightness(0.8)),
+    fn calculate_matrix_neutral_produces_identity() {
+        let t = WinMagAPIColorTransformer::default();
+        let m = t.calculate_matrix(
+            ChannelType::ColorTemp.neutral_value(),
+            ChannelType::Saturation.neutral_value(),
+            ChannelType::Brightness.neutral_value(),
         );
-        let cached_before = *t.cached_matrix.get_value();
-
-        t.update_cached_matrix(
-            Update::Unchanged(ChannelValue::Saturation(0.5)),
-            Update::Unchanged(ChannelValue::ColorTempKelvin(3000)),
-            Update::Unchanged(ChannelValue::Brightness(0.8)),
-        );
-
-        assert!(!t.cached_matrix.is_changed());
-        let diff = (*t.cached_matrix.get_value() - cached_before).abs();
-        assert!(diff.max() < 1e-10);
-    }
-
-    #[test]
-    fn neutral_inputs_produce_near_identity() {
-        let mut t = WinMagAPIColorTransformer::default();
-        t.update_cached_matrix(
-            Update::Changed(ChannelType::Saturation.neutral_value()),
-            Update::Changed(ChannelType::ColorTemp.neutral_value()),
-            Update::Changed(ChannelType::Brightness.neutral_value()),
-        );
-        let m = *t.cached_matrix.get_value();
         for i in 0..3 {
             for j in 0..3 {
                 let expected = if i == j { 1.0 } else { 0.0 };
@@ -380,6 +310,10 @@ mod tests {
                     m[(i, j)]
                 );
             }
+        }
+        // rows 3-4 should remain identity
+        for i in 3..5 {
+            assert!((m[(i, i)] - 1.0).abs() < 1e-6);
         }
     }
 }

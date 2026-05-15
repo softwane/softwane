@@ -50,8 +50,8 @@ impl MacOSRendererDispatcher {
     }
 
     pub fn dispatch(&mut self, logic_frame: Arc<LogicFrame>, app: &AppHandle) {
-        let saturation = logic_frame[ChannelType::Saturation];
         let color_temperature = logic_frame[ChannelType::ColorTemp];
+        let saturation = logic_frame[ChannelType::Saturation];
         let brightness = logic_frame[ChannelType::Brightness];
 
         self.gamma_tweaker.render(
