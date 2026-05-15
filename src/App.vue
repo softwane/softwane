@@ -40,12 +40,15 @@ import {
 
 const isSettingsOpen = ref(false);
 const workMinutes = ref(50);
+const expandedChannelSettings = ref({});
+const isShortcutSectionOpen = ref(false);
 
 const themeModeOptions = [
   { id: "auto", label: "Auto", description: "Follow the system appearance and switch live." },
   { id: "dark", label: "Dark", description: "Always keep the app in dark mode." },
   { id: "light", label: "Light", description: "Always keep the app in light mode." },
 ];
+const channelCompatibilityText = "Saturation cannot run together with Warmth or Brightness on macOS. Turning one on may turn the other mode off.";
 
 const { resolvedTheme, setThemeMode, themeMode } = useAppearance();
 
@@ -180,9 +183,61 @@ const canTakeBreak = computed(() => isProgress.value);
 const canStop = computed(() => isProgress.value || isSettling.value || isRest.value);
 const canStartNewSession = computed(() => isIdle.value);
 const isStartLayerOpen = ref(false);
+const enabledChannelCount = computed(() => Object.values(channelEnabled.value).filter(Boolean).length);
+const cueSummaryText = computed(() => {
+  if (enabledChannelCount.value === 0) return "No visual cue is active";
+  const active = channelConfigs.value
+    .filter(([type]) => channelEnabled.value[type])
+    .map(([type]) => channelLabel(type));
+  return `${active.join(" + ")} active`;
+});
 
 function hasChannel(type) { return channelConfigs.value.some(([t]) => t === type); }
 function channelLabel(type) { return type === "color_temp" ? "Warmth" : type.charAt(0).toUpperCase() + type.slice(1); }
+
+function channelDescription(type) {
+  if (type === "saturation") return "Softens color as the session approaches its end.";
+  if (type === "color_temp") return "Warms the display into a sunset-like tone.";
+  if (type === "brightness") return "Dims the display for a lower-presence cue.";
+  return "";
+}
+
+function formatPercent(value) {
+  return `${(value * 100).toFixed(0)}%`;
+}
+
+function formatMinutes(durationMs) {
+  return `${Math.round(durationMs / 60_000)} min`;
+}
+
+function channelTargetSummary(type) {
+  const value = getChannelTargetValueDisplay(type, findChannelConfig(type));
+  if (type === "color_temp") return `${value} K final warmth`;
+  if (type === "brightness") return `${formatPercent(value)} final brightness`;
+  return `${formatPercent(value)} final color`;
+}
+
+function channelTimingSummary(type) {
+  return `starts at ${formatPercent(getChannelBeginRatio(type))}`;
+}
+
+function channelRampSummary(type) {
+  const steepness = getChannelSteepness(type);
+  if (steepness < 6) return "slow ramp";
+  if (steepness > 18) return "sharp ramp";
+  return "balanced ramp";
+}
+
+function isChannelExpanded(type) {
+  return Boolean(expandedChannelSettings.value[type]);
+}
+
+function toggleChannelDetails(type) {
+  expandedChannelSettings.value = {
+    ...expandedChannelSettings.value,
+    [type]: !expandedChannelSettings.value[type],
+  };
+}
 
 function openStartLayer() {
   isStartLayerOpen.value = true;
@@ -212,6 +267,7 @@ const presetDraft = useDraft(presetDurations, async (d) => {
   await saveShortcutPresetDurations(d);
 });
 const presetSaveError = ref("");
+const presetSummaryText = computed(() => presetDraft.draft.value.map(formatMinutes).join(" / "));
 
 function onDraftDurationChange(index, value) {
   const v = Math.max(60_000, Number(value) * 60_000 || 60_000);
@@ -253,6 +309,10 @@ const shortcutDraft = useDraft(shortcutBindings, async (b) => {
   await saveShortcutBindings(b);
 });
 const shortcutSaveError = ref("");
+const configuredShortcutCount = computed(() => {
+  if (!shortcutDraft.draft.value) return 0;
+  return SHORTCUT_ACTIONS.filter((action) => shortcutDraft.draft.value[action]).length;
+});
 
 function setShortcutBinding(action, binding) {
   if (!shortcutDraft.draft.value) return;
@@ -376,87 +436,133 @@ onMounted(() => { init(); });
             <input type="checkbox" :checked="channelEnabled.brightness" @change="onToggleChannel('brightness', $event.target.checked)" /><span>Brightness</span>
           </label>
         </div>
+        <p v-if="hasChannel('saturation')" class="compatibility-note">{{ channelCompatibilityText }}</p>
         <button class="start-button" type="button" @click="onStartSession">Start session</button>
       </div>
     </section>
 
     <!-- Settings layer -->
-    <section :class="['settings-layer', 'mode-settings-layer', { 'is-active': isSettingsOpen }]" role="dialog" :aria-hidden="!isSettingsOpen" aria-label="Channel settings" @click.self="onCloseSettings">
+    <section :class="['settings-layer', 'mode-settings-layer', { 'is-active': isSettingsOpen }]" role="dialog" :aria-hidden="!isSettingsOpen" aria-label="Settings" @click.self="onCloseSettings">
       <div class="settings-sheet settings-page">
         <header class="settings-header">
-          <div><h1 class="settings-kicker">Mode settings</h1></div>
+          <div>
+            <p class="settings-kicker">Settings</p>
+            <h1 class="settings-title">Tune Softwane</h1>
+          </div>
           <button class="icon-button" type="button" aria-label="Close settings" @click="onCloseSettings">&times;</button>
         </header>
 
-        <!-- Per-channel config -->
         <p v-if="configMutationError" class="settings-error" role="status">{{ configMutationError }}</p>
-        <div class="channel-settings-list">
-          <template v-for="[type] in channelConfigs" :key="type">
-            <div class="channel-setting-card">
-              <label class="field">
-                <input type="checkbox" :checked="channelEnabled[type]" @change="onToggleChannel(type, $event.target.checked)" />
-                <strong>{{ channelLabel(type) }}</strong>
-              </label>
 
-              <div class="channel-config-controls" v-if="channelEnabled[type]">
-                <!-- Begin ratio -->
+        <section class="settings-summary" aria-label="Current settings summary">
+          <div>
+            <span>Cue</span>
+            <strong>{{ cueSummaryText }}</strong>
+          </div>
+          <div>
+            <span>Presets</span>
+            <strong>{{ presetSummaryText }}</strong>
+          </div>
+          <div>
+            <span>App</span>
+            <strong>{{ themeModeSummary }}</strong>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="cue-settings-title">
+          <div class="settings-section-header">
+            <div>
+              <p class="settings-kicker">Cue</p>
+              <h2 id="cue-settings-title" class="settings-section-title">Visual reminder</h2>
+            </div>
+            <span class="settings-group-meta">Changes apply immediately</span>
+          </div>
+
+          <div class="preview-control">
+            <div>
+              <strong>{{ isPreview ? `Preview ${formatPercent(previewProgress)}` : "Preview the cue" }}</strong>
+              <span>Inspect the display effect without starting a session.</span>
+            </div>
+            <div class="preview-actions">
+              <template v-if="!isPreview">
+                <button class="action-button" type="button" @click="enterPreview">Open preview</button>
+              </template>
+              <template v-else>
+                <input aria-label="Preview intensity" type="range" min="0" max="1" step="0.01" :value="previewProgress" @input="setPreviewProgress($event.target.value)" />
+                <button class="action-button" type="button" @click="exitPreview">Close preview</button>
+              </template>
+            </div>
+          </div>
+
+          <p v-if="hasChannel('saturation')" class="compatibility-note">{{ channelCompatibilityText }}</p>
+
+          <div class="channel-settings-list">
+            <article v-for="[type] in channelConfigs" :key="type" :class="['channel-setting-card', { 'is-disabled': !channelEnabled[type] }]">
+              <div class="channel-setting-head">
+                <label class="setting-switch">
+                  <input type="checkbox" :checked="channelEnabled[type]" @change="onToggleChannel(type, $event.target.checked)" />
+                  <span>
+                    <strong>{{ channelLabel(type) }}</strong>
+                    <small>{{ channelDescription(type) }}</small>
+                  </span>
+                </label>
+                <button class="text-button" type="button" :aria-expanded="isChannelExpanded(type)" @click="toggleChannelDetails(type)">
+                  {{ isChannelExpanded(type) ? "Hide" : "Details" }}
+                </button>
+              </div>
+
+              <div v-if="channelEnabled[type]" class="channel-metrics" aria-label="Channel summary">
+                <span>{{ channelTimingSummary(type) }}</span>
+                <span>{{ channelTargetSummary(type) }}</span>
+                <span>{{ channelRampSummary(type) }}</span>
+              </div>
+
+              <div class="channel-config-controls" v-if="channelEnabled[type] && isChannelExpanded(type)">
                 <label class="field field-compact">
-                  <span>Begin at {{ (getChannelBeginRatio(type) * 100).toFixed(0) }}%</span>
+                  <span>Starts at {{ formatPercent(getChannelBeginRatio(type)) }}</span>
                   <input type="range" min="0" max="1" step="0.01" :value="getChannelBeginRatio(type)" @input="updateChannelProgressBeginRatio(type, Number($event.target.value))" />
                 </label>
 
-                <!-- Target value (type-specific) -->
                 <template v-if="type === 'saturation'">
                   <label class="field field-compact">
-                    <span>Target saturation {{ (getChannelTargetValueDisplay(type, findChannelConfig(type)) * 100).toFixed(0) }}%</span>
+                    <span>Final color {{ formatPercent(getChannelTargetValueDisplay(type, findChannelConfig(type))) }}</span>
                     <input type="range" min="0.2" max="1" step="0.01" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
                   </label>
                 </template>
                 <template v-else-if="type === 'color_temp'">
                   <label class="field field-compact">
-                    <span>Target warmth {{ getChannelTargetValueDisplay(type, findChannelConfig(type)) }} K</span>
+                    <span>Final warmth {{ getChannelTargetValueDisplay(type, findChannelConfig(type)) }} K</span>
                     <input type="range" min="1000" max="6500" step="100" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
                   </label>
                 </template>
                 <template v-else-if="type === 'brightness'">
                   <label class="field field-compact">
-                    <span>Target brightness {{ (getChannelTargetValueDisplay(type, findChannelConfig(type)) * 100).toFixed(0) }}%</span>
+                    <span>Final brightness {{ formatPercent(getChannelTargetValueDisplay(type, findChannelConfig(type))) }}</span>
                     <input type="range" min="0" max="1" step="0.01" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
                   </label>
                 </template>
 
-                <!-- Curve steepness -->
                 <label class="field field-compact">
-                  <span>Steepness {{ getChannelSteepness(type).toFixed(1) }}</span>
+                  <span>Ramp shape {{ getChannelSteepness(type).toFixed(1) }}</span>
                   <input type="range" min="0.5" max="30" step="0.5" :value="getChannelSteepness(type)" @input="updateChannelCurveParams(type, Number($event.target.value))" />
                 </label>
               </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- Preview -->
-        <section class="settings-group">
-          <template v-if="!isPreview">
-            <button class="action-button" type="button" @click="enterPreview">Open preview</button>
-          </template>
-          <template v-else>
-            <div class="settings-group-header"><span class="settings-group-title">Preview ({{ (previewProgress * 100).toFixed(0) }}%)</span></div>
-            <input type="range" min="0" max="1" step="0.01" :value="previewProgress" @input="setPreviewProgress($event.target.value)" />
-            <button class="action-button" type="button" @click="exitPreview">Close preview</button>
-          </template>
+            </article>
+          </div>
         </section>
 
-        <!-- Preset durations (Save / Cancel) -->
-        <section class="settings-group">
-          <div class="settings-group-header">
-            <span class="settings-group-title">Shortcut durations</span>
+        <section class="settings-section" aria-labelledby="session-settings-title">
+          <div class="settings-section-header">
+            <div>
+              <p class="settings-kicker">Session</p>
+              <h2 id="session-settings-title" class="settings-section-title">Quick start durations</h2>
+            </div>
             <div class="settings-group-actions">
               <button class="ghost-button" type="button" :disabled="!presetDraft.dirty.value" @click="onPresetCancel">Cancel</button>
               <button class="ghost-button ghost-button-primary" type="button" :disabled="!presetDraft.dirty.value" @click="onPresetSave">Save</button>
             </div>
           </div>
-          <div class="field-grid">
+          <div class="field-grid preset-duration-grid">
             <label v-for="(d, i) in presetDraft.draft.value" :key="i" class="field field-compact">
               <span>Preset {{ i + 1 }}</span>
               <div class="input-with-unit">
@@ -468,18 +574,27 @@ onMounted(() => { init(); });
           <p v-if="presetSaveError" class="settings-error">{{ presetSaveError }}</p>
         </section>
 
-        <!-- Shortcut bindings (Save / Cancel) -->
-        <section class="settings-group" v-if="shortcutDraft.draft.value">
-          <div class="settings-group-header">
-            <span class="settings-group-title">Shortcuts</span>
+        <section class="settings-section" v-if="shortcutDraft.draft.value" aria-labelledby="controls-settings-title">
+          <div class="settings-section-header">
+            <div>
+              <p class="settings-kicker">Controls</p>
+              <h2 id="controls-settings-title" class="settings-section-title">Shortcuts</h2>
+            </div>
             <div class="settings-group-actions">
+              <span class="settings-group-meta">{{ configuredShortcutCount }} configured</span>
+              <button class="text-button" type="button" :aria-expanded="isShortcutSectionOpen" @click="isShortcutSectionOpen = !isShortcutSectionOpen">
+                {{ isShortcutSectionOpen ? "Hide" : "Show" }}
+              </button>
               <button class="ghost-button" type="button" :disabled="!shortcutDraft.dirty.value" @click="onShortcutCancel">Cancel</button>
               <button class="ghost-button ghost-button-primary" type="button" :disabled="!shortcutDraft.dirty.value || shortcutHasConflict" @click="onShortcutSave">Save</button>
             </div>
           </div>
           <p v-if="shortcutHasConflict" class="settings-error">{{ conflictBannerText }}</p>
-          <div class="shortcut-list">
-            <div v-for="action in SHORTCUT_ACTIONS" :key="action" class="shortcut-row">
+          <p v-if="!isShortcutSectionOpen" class="settings-section-note">
+            Keyboard controls are configured. Open this section only when you need to change them.
+          </p>
+          <div v-if="isShortcutSectionOpen" class="shortcut-list">
+            <div v-for="action in SHORTCUT_ACTIONS" :key="action" :class="['shortcut-row', { 'is-invalid': shortcutConflicts.has(action) }]">
               <span class="shortcut-label">{{ shortcutLabels[action] }}</span>
               <KeyBindingInput
                 :model-value="shortcutDraft.draft.value[action]"
@@ -491,39 +606,47 @@ onMounted(() => { init(); });
           <p v-if="shortcutSaveError" class="settings-error">{{ shortcutSaveError }}</p>
         </section>
 
-        <!-- Theme -->
-        <section class="settings-group">
-          <div class="settings-group-header">
-            <span class="settings-group-title">Theme</span>
-            <span class="settings-group-meta">{{ themeModeSummary }}</span>
+        <section class="settings-section" aria-labelledby="app-settings-title">
+          <div class="settings-section-header">
+            <div>
+              <p class="settings-kicker">App</p>
+              <h2 id="app-settings-title" class="settings-section-title">Appearance and startup</h2>
+            </div>
+            <span class="settings-group-meta">Changes apply immediately</span>
           </div>
-          <div class="cue-style-list" role="radiogroup" aria-label="Theme mode">
-            <button v-for="option in themeModeOptions" :key="option.id" :class="['cue-style-card', { active: themeMode === option.id }]" type="button" role="radio" :aria-checked="themeMode === option.id" @click="setThemeMode(option.id)">
-              <strong>{{ option.label }}</strong><span>{{ option.description }}</span>
-            </button>
-          </div>
-        </section>
 
-        <!-- Startup -->
-        <section class="settings-group">
-          <div class="settings-group-header">
-            <span class="settings-group-title">Startup</span>
+          <div class="settings-subsection">
+            <div class="settings-group-header">
+              <span class="settings-group-title">Theme</span>
+              <span class="settings-group-meta">{{ themeModeSummary }}</span>
+            </div>
+            <div class="cue-style-list" role="radiogroup" aria-label="Theme mode">
+              <button v-for="option in themeModeOptions" :key="option.id" :class="['cue-style-card', { active: themeMode === option.id }]" type="button" role="radio" :aria-checked="themeMode === option.id" @click="setThemeMode(option.id)">
+                <strong>{{ option.label }}</strong><span>{{ option.description }}</span>
+              </button>
+            </div>
           </div>
-          <div class="startup-toggle-list">
-            <label class="field startup-toggle">
-              <input type="checkbox" :checked="autostartEnabled" @change="setAutostart($event.target.checked)" />
-              <span>
-                <strong>Launch at login</strong>
-                <small>Start Softwane when the system signs in.</small>
-              </span>
-            </label>
-            <label class="field startup-toggle">
-              <input type="checkbox" :checked="silentStart" @change="setSilentStart($event.target.checked)" />
-              <span>
-                <strong>Silent start</strong>
-                <small>Keep the main window hidden when Softwane starts.</small>
-              </span>
-            </label>
+
+          <div class="settings-subsection">
+            <div class="settings-group-header">
+              <span class="settings-group-title">Startup</span>
+            </div>
+            <div class="startup-toggle-list">
+              <label class="field startup-toggle">
+                <input type="checkbox" :checked="autostartEnabled" @change="setAutostart($event.target.checked)" />
+                <span>
+                  <strong>Launch at login</strong>
+                  <small>Start Softwane when the system signs in.</small>
+                </span>
+              </label>
+              <label class="field startup-toggle">
+                <input type="checkbox" :checked="silentStart" @change="setSilentStart($event.target.checked)" />
+                <span>
+                  <strong>Silent start</strong>
+                  <small>Keep the main window hidden when Softwane starts.</small>
+                </span>
+              </label>
+            </div>
           </div>
         </section>
       </div>
