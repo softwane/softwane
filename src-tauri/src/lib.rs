@@ -30,11 +30,6 @@ struct LogGuard(tracing_appender::non_blocking::WorkerGuard);
 
 static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 
-#[cfg(target_os = "macos")]
-unsafe extern "C" {
-    fn softwane_macos_colorsync_reset_saturation() -> bool;
-}
-
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -141,7 +136,7 @@ pub fn run() {
                 );
                 let _ = store_for_hook.save();
 
-                let _ = app_for_hook.emit("crash_recovered", crash_json);
+                let _ = app_for_hook.emit("crashed", crash_json);
                 notify_crash(&app_for_hook);
             }));
 
@@ -219,15 +214,36 @@ pub fn run() {
             }
         }
         RunEvent::Exit => {
-            #[cfg(target_os = "macos")]
-            unsafe {
-                softwane_macos_colorsync_reset_saturation();
+            if CLEANUP_DONE.load(Ordering::Acquire) {
+                return;
             }
-            // FIXME: Sometimes (cmd+Q, quiting from menu, and quiting from dock) tauri program exits
-            // without emitting `RunEvent::ExitRequested` and emits `RunEvent::Exit` directly on macOS.
-            // See: https://github.com/tauri-apps/tauri/issues/9198.
-            // If I want to fix it without tauri's team fix it in tauri, I have to get Engine back
-            // from its thread, because the event loop has been terminated when `Exit` is emitted.
+            
+            CLEANUP_DONE.store(true, Ordering::Release);
+
+            let engine_handle = app_handle.state::<EngineHandle>();
+            
+            if let Err(_) = engine_handle.tx.blocking_send(EngineEvent::AbnormalShutdown) {
+                return;
+            }
+
+            let mut locked = match engine_handle.join.lock() {
+                Ok(locked) => locked,
+                Err(err) => {
+                    tracing::error!(
+                        "Panic during last cleanup when ExitRequested:\n{:#?}\n",
+                        err,
+                    );
+                    err.into_inner()
+                }
+            };
+            let Some(jh) = locked.take() else {
+                tracing::warn!("Already been cleaning or cleaned up.");
+                return;
+            };
+
+            if let Ok(mut engine) = jh.join() {
+                engine.shutdown_on_main_thread();
+            }
         }
         _ => {}
     });
@@ -241,7 +257,7 @@ pub fn run() {
             Ok(locked) => locked,
             Err(err) => {
                 tracing::error!(
-                    "Panic during last cleanup:\n{:#?}\n Exit code: {}. Give up cleaning up!",
+                    "Panic during last cleanup:\n{:#?}\n Current exit code: {}. Give up cleaning up!",
                     err,
                     exit_code
                 );

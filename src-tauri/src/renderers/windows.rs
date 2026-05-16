@@ -73,6 +73,10 @@ impl WindowsRendererDispatcher {
         self.color_transformer.shutdown(app, self.tx.clone());
     }
 
+    pub fn shutdown_on_main_thread(&mut self, _app: &AppHandle) {
+        self.color_transformer.shutdown_on_main_thread();
+    }
+
     pub fn reset(&mut self, states: ChannelSwitchStates, app: &AppHandle) {
         self.shutdown(app);
         let any_on = states[ChannelType::Saturation]

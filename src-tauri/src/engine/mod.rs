@@ -5,20 +5,18 @@
 
 mod events;
 mod config;
-mod shutdown;
+pub mod shutdown;
 pub mod commands;
 
 pub use events::*;
 
 use std::{
-    panic::{catch_unwind, AssertUnwindSafe},
     sync::{Arc, Mutex},
     thread::JoinHandle,
     time::{Duration, Instant},
-    io::Write,
 };
 
-use tokio::sync::mpsc::{Receiver, Sender, error::TryRecvError};
+use tokio::sync::mpsc::{Receiver, Sender};
 use tauri::{AppHandle, Wry};
 use tauri_plugin_store::Store;
 
@@ -35,13 +33,10 @@ const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(100); // 10 fps ç
 
 const TARGET_FRAME_INTERVAL: Duration = Duration::from_micros(16_667);
 
-const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
-const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(10);
-
 #[derive(Debug)]
 pub struct EngineHandle {
     pub tx: Sender<EngineEvent>,
-    pub join: Mutex<Option<JoinHandle<()>>>,
+    pub join: Mutex<Option<JoinHandle<Engine>>>,
 }
 
 pub struct Engine {
@@ -90,7 +85,7 @@ impl Engine {
         }
     }
 
-    pub fn run(mut self) { loop {
+    pub fn run(mut self) -> Self { loop {
         let frame_started_at = Instant::now();
         let dt_ms = frame_started_at
             .saturating_duration_since(self.last_frame_at)
@@ -101,7 +96,10 @@ impl Engine {
 
         if frame_events.shutdown_requested {
             self.shutdown();
-            return;
+            return self;
+        }
+        if frame_events.shutdown {
+            return self;
         }
 
         // force_reset first
@@ -165,6 +163,7 @@ impl Engine {
                 },
                 EngineEvent::ForceReset => frame_events.force_reset = true,
                 EngineEvent::Shutdown => frame_events.shutdown_requested = true,
+                EngineEvent::AbnormalShutdown => frame_events.shutdown = true,
             }
         }
 

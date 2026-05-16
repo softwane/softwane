@@ -87,6 +87,11 @@ impl MacOSRendererDispatcher {
         self.saturation_filter.shutdown(app, self.tx.clone());
     }
 
+    pub fn shutdown_on_main_thread(app: &AppHandle) {
+        self.gamma_tweaker.shutdown(app, self.tx.clone());
+        self.saturation_filter.shutdown(app, self.tx.clone());
+    }
+
     pub fn reset(&mut self, states: ChannelSwitchStates, app: &AppHandle) {
         self.shutdown(app);
         if states[ChannelType::ColorTemp] || states[ChannelType::Brightness] {

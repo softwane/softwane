@@ -131,6 +131,27 @@ impl WinMagAPIColorTransformer {
         self.uninit_api(app, tx);
         self.magnification_initialized.store(false, Ordering::Release);
     }
+
+    pub(super) fn shutdown_on_main_thread(&mut self) {
+        if !self.magnification_initialized.load(Ordering::Acquire) { return; }
+
+        let identity = Matrix5::identity().into();
+
+        let effect = MAGCOLOREFFECT { transform: identity };
+        let ok = unsafe {
+            MagSetFullscreenColorEffect(&effect as *const MAGCOLOREFFECT)
+        } != 0;
+
+        if !ok {
+            tracing::error!("Unable to reset color effect when shutdown_on_main_thread");
+        }
+
+        if unsafe { MagUninitialize() == 0 } {
+            tracing::error!("Unable to uninitialize the Windows Magnification API when shutdown_on_main_thread");
+        };
+
+        self.magnification_initialized.store(false, Ordering::Release);
+    }
 }
 
 // ── Main-thread dispatch helpers ─────────────────────────────────────
@@ -223,7 +244,9 @@ impl WinMagAPIColorTransformer {
         let initialized = Arc::clone(&self.magnification_initialized);
         let tx_for_closure = tx.clone();
         let dispatch = app.run_on_main_thread(move || {
-            unsafe { MagUninitialize() };   // 返回值忽略，无可恢复路径
+            if unsafe { MagUninitialize() == 0 } {
+                tracing::error!("Unable to uninitialize the Windows Magnification API when run_on_main_thread");
+            };
             initialized.store(false, Ordering::Release);
             let _ = tx_for_closure.try_send(EngineEvent::Renderer(
                 RendererEvent::ShutdownCompleted { renderer_name: name },

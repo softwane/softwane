@@ -17,6 +17,7 @@ pub enum EngineEvent {
     Progress(ProgressCommandInner),
     ForceReset,
     Shutdown,
+    AbnormalShutdown,
 }
 
 pub enum ProgressCommandInner {
@@ -48,6 +49,7 @@ pub struct FrameEvents {
     pub state_commands: Vec<StateCommand>,
     pub channel_commands: Vec<ChannelCommand>,
     pub shutdown_requested: bool,
+    pub shutdown: bool,
     pub force_reset: bool,
     pub just_transited: bool,
     pub switch_changed: bool,
@@ -60,6 +62,7 @@ impl Default for FrameEvents {
             state_commands: Vec::new(),
             channel_commands: Vec::new(),
             shutdown_requested: false,
+            shutdown: false,
             force_reset: false,
             just_transited: false,
             switch_changed: false,

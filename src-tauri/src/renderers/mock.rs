@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Mock renderer dispatcher — logs every call via `debug!` but performs no
 //! actual rendering.  Useful for testing the engine loop on platforms without
 //! a real sub-renderer (e.g. Linux) and in unit tests.
@@ -47,6 +48,15 @@ impl MockRendererDispatcher {
 
     pub fn shutdown(&mut self, _app: &AppHandle) {
         tracing::debug!("MockRendererDispatcher::shutdown");
+        let _ = self.tx.try_send(EngineEvent::Renderer(
+            RendererEvent::ShutdownCompleted {
+                renderer_name: "mock-dispatcher",
+            },
+        ));
+    }
+
+    pub fn shutdown_on_main_thread(&mut self, _app: &AppHandle) {
+        tracing::debug!("MockRendererDispatcher::shutdown_on_main_thread");
         let _ = self.tx.try_send(EngineEvent::Renderer(
             RendererEvent::ShutdownCompleted {
                 renderer_name: "mock-dispatcher",
