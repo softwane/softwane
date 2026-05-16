@@ -134,6 +134,7 @@ pub fn load_channel_config_array(store: &Store<Wry>) -> ChannelConfigArray {
         let channel_type = SENSORY_CHANNEL_TYPES[i];
         load_channel_config(store, channel_type)
     });
+    // TODO: Should notify the frontend
     normalize_channel_switch_conflicts(&mut configs, store);
     configs
 }

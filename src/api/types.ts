@@ -123,8 +123,8 @@ export type ChannelCommand =
   | { command: "update_reverse_curve_paras";  channel_type: ChannelType;  curve_parameters: CurveParameters };
 
 export type ProgressCommand =
-  | { command: "clear_channel";     window: string }
-  | { command: "register_channel";  channel: Channel<ProgressPayload>; window: string };
+  | { command: "clear_channel" }
+  | { command: "register_channel";  channel: Channel<ProgressPayload> };
 
 export type EngineCommand =
   | { category: "state";     content: StateCommand }

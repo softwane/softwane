@@ -68,7 +68,7 @@ export const forceReset = () =>
 export const registerProgressChannel = (onTick: (payload: ProgressPayload) => void) => {
   const ch = new Channel<ProgressPayload>();
   ch.onmessage = onTick;
-  commandEngine({ category: "progress", content: { command: "register_channel", channel: ch, window: "main" } });
+  commandEngine({ category: "progress", content: { command: "register_channel", channel: ch } });
 }
 
 // ── Engine ──────────────────────────────────────────────────────────────

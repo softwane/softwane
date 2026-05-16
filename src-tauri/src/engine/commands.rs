@@ -23,15 +23,15 @@ pub enum EngineCommand {
 #[derive(Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum ProgressCommand {
-    RegisterChannel{ channel: JavaScriptChannelId, window: String },
-    ClearChannel{ window: String },
+    RegisterChannel{ channel: JavaScriptChannelId },
+    ClearChannel,
 }
 
 impl std::fmt::Debug for ProgressCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::RegisterChannel{ channel: _, window } => write!(f, "RegisterChannel on {window} window"),
-            Self::ClearChannel{ window } => write!(f, "ClearChannel on {window} window"),
+            Self::RegisterChannel{ channel: _ } => write!(f, "RegisterChannel"),
+            Self::ClearChannel => write!(f, "ClearChannel"),
         }
     }
 }
@@ -50,17 +50,18 @@ pub async fn command_engine(
         EngineCommand::ForceReset => EngineEvent::ForceReset,
         EngineCommand::Shutdown => EngineEvent::Shutdown,
         EngineCommand::Progress(cmd) => {
+            let window = webview.label().to_string();
             let inner_command = match cmd {
-                ProgressCommand::RegisterChannel { channel, window } => {
+                ProgressCommand::RegisterChannel { channel} => {
                     let initialized_channel = channel.channel_on(webview);
                     ProgressCommandInner::RegisterChannel{ channel: initialized_channel, window}
                 },
-                ProgressCommand::ClearChannel { window } => ProgressCommandInner::ClearChannel{ window },
+                ProgressCommand::ClearChannel => ProgressCommandInner::ClearChannel{ window },
             };
             EngineEvent::Progress(inner_command)
         },
     };
-    tracing::debug!("forward_engine: Sending command: {event:?}");
+    tracing::debug!("command_engine: Sending command: {event:?}");
     app.state::<EngineHandle>().tx.send(event).await?;
     Ok(())
 }
@@ -77,17 +78,18 @@ pub fn command_engine_nowait(
         EngineCommand::ForceReset => EngineEvent::ForceReset,
         EngineCommand::Shutdown => EngineEvent::Shutdown,
         EngineCommand::Progress(cmd) => {
+            let window = webview.label().to_string();
             let inner_command = match cmd {
-                ProgressCommand::RegisterChannel { channel, window } => {
+                ProgressCommand::RegisterChannel { channel, .. } => {
                     let initialized_channel = channel.channel_on(webview);
                     ProgressCommandInner::RegisterChannel{ channel: initialized_channel, window}
                 },
-                ProgressCommand::ClearChannel { window } => ProgressCommandInner::ClearChannel{ window },
+                ProgressCommand::ClearChannel { .. } => ProgressCommandInner::ClearChannel{ window },
             };
             EngineEvent::Progress(inner_command)
         },
     };
-    tracing::debug!("forward_engine_nowait: Sending command: {event:?}");
+    tracing::debug!("command_engine_nowait: Sending command: {event:?}");
     match app.state::<EngineHandle>().tx.try_send(event) {
         Ok(_) => Ok(()),
         Err(TrySendError::Closed(event)) => {

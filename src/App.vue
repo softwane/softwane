@@ -303,7 +303,10 @@ async function onOpenSettings() {
   isSettingsOpen.value = true;
 }
 
-function onCloseSettings() { isSettingsOpen.value = false; }
+function onCloseSettings() { 
+  exitPreview();
+  isSettingsOpen.value = false; 
+}
 
 // ── Preset durations (Save / Cancel) ──────────────────────────────────
 
