@@ -87,7 +87,7 @@ impl MacOSRendererDispatcher {
         self.saturation_filter.shutdown(app, self.tx.clone());
     }
 
-    pub fn shutdown_on_main_thread(app: &AppHandle) {
+    pub fn shutdown_on_main_thread(&mut self, app: &AppHandle) {
         self.gamma_tweaker.shutdown(app, self.tx.clone());
         self.saturation_filter.shutdown(app, self.tx.clone());
     }
