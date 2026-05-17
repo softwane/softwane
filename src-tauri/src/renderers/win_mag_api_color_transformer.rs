@@ -102,8 +102,6 @@ impl WinMagAPIColorTransformer {
             return;
         }
 
-        // Optimistically set — init closure will roll back on failure.
-        self.magnification_initialized.store(true, Ordering::Release);
         self.init_api(app, tx.clone());
 
         let identity = Matrix5::identity();
@@ -129,7 +127,6 @@ impl WinMagAPIColorTransformer {
         self.apply_matrix(app, tx.clone(), &identity);
 
         self.uninit_api(app, tx);
-        self.magnification_initialized.store(false, Ordering::Release);
     }
 
     pub(super) fn shutdown_on_main_thread(&mut self) {
@@ -166,7 +163,6 @@ impl WinMagAPIColorTransformer {
         let initialized = Arc::clone(&self.magnification_initialized);
         let dispatch = app.run_on_main_thread(move || {
             if unsafe { MagInitialize() } == 0 {
-                initialized.store(false, Ordering::Release);
                 let _ = tx.try_send(EngineEvent::Renderer(
                     RendererEvent::StartupFailed {
                         renderer_name: name,
@@ -174,6 +170,7 @@ impl WinMagAPIColorTransformer {
                     },
                 ));
             } else {
+                initialized.store(true, Ordering::Release);
                 let _ = tx.try_send(EngineEvent::Renderer(
                     RendererEvent::StartupSuccessful { renderer_name: name },
                 ));
@@ -185,7 +182,6 @@ impl WinMagAPIColorTransformer {
                 err.to_string(),
             );
             // EventLoopClosed: engine thread cannot process events either.
-            self.magnification_initialized.store(false, Ordering::Release);
         }
     }
 
@@ -201,18 +197,21 @@ impl WinMagAPIColorTransformer {
         let matrix_f32 = matrix.cast().into();
 
         let dispatch = app.run_on_main_thread(move || {
+            tracing::trace!("applying color transform matrix: {}", initialized.load(Ordering::Acquire));
             if !initialized.load(Ordering::Acquire) {
                 let _ = tx.try_send(EngineEvent::Renderer(
                     RendererEvent::RenderUnappliedDueToNotStartupped {
                         renderer_name: name,
                     },
                 ));
+                tracing::trace!("cancel applying color transform matrix: {}", initialized.load(Ordering::Acquire));
                 return;
             }
             let effect = MAGCOLOREFFECT { transform: matrix_f32 };
             let ok = unsafe {
                 MagSetFullscreenColorEffect(&effect as *const MAGCOLOREFFECT)
             } != 0;
+            tracing::trace!("applied color transform matrix: {}", initialized.load(Ordering::Acquire));
             let event = if ok {
                 RendererEvent::RenderSuccessful { renderer_name: name }
             } else {
@@ -246,8 +245,10 @@ impl WinMagAPIColorTransformer {
         let dispatch = app.run_on_main_thread(move || {
             if unsafe { MagUninitialize() == 0 } {
                 tracing::error!("Unable to uninitialize the Windows Magnification API when run_on_main_thread");
-            };
-            initialized.store(false, Ordering::Release);
+            } else {
+                tracing::info!("Magnification API uninitialized successfully");
+                initialized.store(false, Ordering::Release);
+            }
             let _ = tx_for_closure.try_send(EngineEvent::Renderer(
                 RendererEvent::ShutdownCompleted { renderer_name: name },
             ));
