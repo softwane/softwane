@@ -11,6 +11,7 @@ mod window;
 
 use std::collections::HashMap;
 use std::io::Write;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -25,12 +26,12 @@ use shortcuts::{STORE_KEY_SHORTCUT_BINDINGS, default_shortcut_bindings};
 use tray::notify_crash;
 use window::{STORE_KEY_SILENT_START, open_main_window};
 
-#[allow(dead_code)]
-struct LogGuard(tracing_appender::non_blocking::WorkerGuard);
-
 static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 
 pub fn run() {
+    let log_guard = Arc::new(Mutex::new(None));
+    let log_guard_clone = log_guard.clone();
+    
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -38,7 +39,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .setup(|app| {
+        .setup(move |app| {
             // ── Tracing ──────────────────────────────────────────────
             let log_dir = app.path().app_log_dir()
                 .or_else(|_| app.path().app_local_data_dir())?;
@@ -63,7 +64,8 @@ pub fn run() {
                     .init();
             }
 
-            app.manage(LogGuard(guard));
+            let mut log_guard = log_guard_clone.lock().expect("This is the first call");
+            *log_guard = Some(guard);
 
             // ── Channel & store ──────────────────────────────────────
             let (event_tx, event_rx) = tokio::sync::mpsc::channel(256);
@@ -199,7 +201,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("failed to build softwane");
 
-    app.run(|app_handle, event| match event {
+    let log_guard_another_clone = log_guard.clone();
+
+    app.run(move |app_handle, event| match event {
         RunEvent::ExitRequested { api, code,.. } => {
             let Some(exit_code) = code else {
                 // Prevent exit when all windows are desdroyed.
@@ -244,6 +248,8 @@ pub fn run() {
             if let Ok(mut engine) = jh.join() {
                 engine.shutdown_on_main_thread();
             }
+
+            let _log_guard = log_guard_another_clone.lock().expect("Exit should be called only once").take();
         }
         _ => {}
     });
