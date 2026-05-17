@@ -149,6 +149,7 @@ impl Engine {
 
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
+                // TODO: use channel system to get suggested reverse / settling time based on the input max time
                 EngineEvent::State(command) => frame_events.state_commands.push(command),
                 EngineEvent::Channel(command) => frame_events.channel_commands.push(command),
                 EngineEvent::Renderer(renderer_event) => log_renderer_event(&renderer_event),
