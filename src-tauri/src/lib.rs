@@ -24,7 +24,7 @@ use engine::{Engine, EngineHandle, EngineEvent, ProgressCommandInner};
 use commands::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS};
 use shortcuts::{STORE_KEY_SHORTCUT_BINDINGS, default_shortcut_bindings};
 use tray::notify_crash;
-use window::{STORE_KEY_SILENT_START, open_main_window};
+use window::{STORE_KEY_SILENT_START, WindowManager, create_main_window};
 
 static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 
@@ -67,9 +67,7 @@ pub fn run() {
             let mut log_guard = log_guard_clone.lock().expect("This is the first call");
             *log_guard = Some(guard);
 
-            // ── Channel & store ──────────────────────────────────────
-            let (event_tx, event_rx) = tokio::sync::mpsc::channel(256);
-
+            // ── Store ──────────────────────────────────────
             let mut defaults: HashMap<String, serde_json::Value> = HashMap::new();
             defaults.extend(channels::store_defaults());
             defaults.extend(timer_state_machine::store_defaults());
@@ -103,8 +101,8 @@ pub fn run() {
             if !silent_start {
                 let app_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(err) = open_main_window(app_handle).await {
-                        tracing::error!("Failed to open main window on startup: {err:?}.");
+                    if let Err(err) = create_main_window(&app_handle).await {
+                        tracing::error!("Failed to create main window on startup: {err:?}.");
                     }
                 });
             }
@@ -143,7 +141,8 @@ pub fn run() {
             }));
 
             let shared_state = state::SharedTimerState::new();
-
+            let (event_tx, event_rx) = tokio::sync::mpsc::channel(256);
+            
             let engine = Engine::new(
                 app.handle().clone(),
                 event_rx,
@@ -158,6 +157,7 @@ pub fn run() {
                 join: std::sync::Mutex::new(Some(engine_join)),
             });
             app.manage(shared_state);
+            app.manage(Mutex::new(WindowManager::default()));
 
             tray::setup_tray(app.handle())?;
             shortcuts::setup_global_shortcuts(app.handle());
@@ -170,16 +170,41 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| match event {
-            WindowEvent::CloseRequested { .. } if window.label() == "main" => {
-                let tx = window.app_handle().state::<EngineHandle>().tx.clone();
-                let event = EngineEvent::Progress(ProgressCommandInner::ClearChannel {
-                    window: window.label().to_string()
-                });
-                tauri::async_runtime::spawn(async move {
-                    if let Err(err) = tx.send(event).await {
-                        tracing::error!("Failed to clear channel: {err:?}.");
-                    }
-                });
+            WindowEvent::CloseRequested { api, .. } if window.label() == "main" => {
+                let app_handle = window.app_handle();
+                let state = app_handle.state::<Mutex<WindowManager>>();
+                let mut mgr = state.lock().unwrap();
+
+                // Defence 1: stale timer close — a previous timer's close event
+                // that was invalidated by a subsequent show.
+                if mgr.stale_timer_closes > 0 {
+                    mgr.stale_timer_closes -= 1;
+                    api.prevent_close();
+                    return;
+                }
+
+                // Defence 2: legitimate timer close.
+                if mgr.expected_timer_closes > 0 {
+                    mgr.expected_timer_closes -= 1;
+                    // Allow close: clean up progress channel.
+                    let tx = app_handle.state::<EngineHandle>().tx.clone();
+                    let event = EngineEvent::Progress(ProgressCommandInner::ClearChannel{
+                        window: window.label().to_string()
+                    });
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(err) = tx.send(event).await {
+                            tracing::error!("Failed to clear channel: {err:?}.");
+                        }
+                    });
+                    return;
+                }
+
+                // Defence 3: user clicked X — hide and start 1-min timer.
+                api.prevent_close();
+                if let Some(w) = app_handle.get_webview_window("main") {
+                    drop(mgr);
+                    window::initiate_delayed_close(app_handle.clone(), &w);
+                }
             },
             _ => {}
         })

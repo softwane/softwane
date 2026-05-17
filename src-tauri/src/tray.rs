@@ -12,7 +12,7 @@ use crate::{
     timer_state_machine::{TimerState, commands::StateCommand},
     state::SharedTimerState,
     commands::get_preset_session_durations,
-    window::{WindowCommands, open_main_window, toggle_main_window_sync},
+    window,
 };
 
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -46,9 +46,8 @@ fn build_tray(app: &AppHandle, phase_label: &str, durations: [u64; 3]) -> tauri:
             "open" => {
                 let app_c = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(err) = open_main_window(app_c).await {
-                        tracing::error!("Failed to open main window from tray: {err:?}.");
-                    }
+                    tracing::debug!("begin showing window from tray");
+                    window::show_main_window(app_c).await;
                 });
             },
             other => {
@@ -77,7 +76,9 @@ fn build_tray(app: &AppHandle, phase_label: &str, durations: [u64; 3]) -> tauri:
                 ..
             } = event {
                 let app_handle = tray.app_handle().clone();
-                toggle_main_window_sync(app_handle, WindowCommands::Hide);
+                tauri::async_runtime::spawn(async move {
+                    window::toggle_main_window(app_handle).await;
+                });
             }
         })
         .build(app)?;

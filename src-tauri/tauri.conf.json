@@ -12,7 +12,18 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-window-show-focus",
+          "windows": ["main"],
+          "permissions": [
+            "core:window:default",
+            "core:window:allow-show",
+            "core:window:allow-set-focus"
+          ]
+        }
+      ]
     }
   },
   "bundle": {

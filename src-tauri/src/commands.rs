@@ -22,14 +22,6 @@ pub enum CommandError {
     StoreError(#[from] StoreError),
     #[error("Creating window failed: {0}")]
     CreateWindowFailed(#[source] TauriError),
-    #[error("Showing window failed: {0}")]
-    ShowWindowFailed(#[source] TauriError),
-    #[error("Closing window failed: {0}")]
-    CloseWindowFailed(#[source] TauriError),
-    #[error("Hiding window failed: {0}")]
-    HideWindowFailed(#[source] TauriError),
-    #[error("{0}")]
-    OtherWindowError(#[source] TauriError),
     #[error("{0}")]
     BadArguments(String),
     #[error("{0}")]

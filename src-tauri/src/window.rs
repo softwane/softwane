@@ -1,82 +1,141 @@
-use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow};
+use std::sync::Mutex;
+use std::time::Duration;
+
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow};
 use tauri_plugin_store::StoreExt;
 
 use crate::commands::CommandError;
 
 pub const STORE_KEY_SILENT_START: &str = "silent_start";
+const DELAYED_CLOSE_DURATION_SECS: u64 = 60;
 
-/// Show the main window to foreground and set focus; create the main window it does not exist.
-pub async fn open_main_window<R: Runtime>(app_handle: AppHandle<R>) -> Result<(), CommandError> {
-    let window = match app_handle.get_webview_window("main") {
-        Some(window) => window,
-        None => {
-            tauri::WebviewWindowBuilder::new(
-                &app_handle,
-                "main",
-                WebviewUrl::App("index.html".into()),
-            )
-            .title("Softwane")
-            .inner_size(560.0, 470.0)
-            .resizable(true)
-            // .min_inner_size(480.0, 380.0)   // 除非明确需要，不限制窗口大小，最讨厌不能自定义窗口形状的应用
-            .visible(false) 
-            .build()
-            .map_err(|e| CommandError::CreateWindowFailed(e))?
-            // TODO: 如果启动窗口加载时间太长，幽灵启动，让前端展示自己
-            // 若如此，则拆分为show_and_focus与build。
-            // return Ok(())
-        }
+// ── WindowManager ─────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WindowState {
+    VisibleFocused,
+    VisibleUnfocused,
+    Hidden,
+    Minimized,
+    Closed,
+}
+
+#[derive(Default)]
+pub struct WindowManager {
+    pub stale_timer_closes: u32,
+    pub expected_timer_closes: u32,
+    pub timer_task: Option<tauri::async_runtime::JoinHandle<()>>,
+}
+
+// ── State helpers ─────────────────────────────────────────────────────
+
+pub fn get_main_window_state(app_handle: &AppHandle) -> WindowState {
+    let Some(window) = app_handle.get_webview_window("main") else {
+        return WindowState::Closed;
     };
-    window.show().map_err(|e| CommandError::ShowWindowFailed(e))?;
-    if let Err(err) = window.set_focus() {
-        tracing::warn!("Failed to set focus to main window: {err:?}.")
-    };
-    Ok(())
+    if window.is_minimized().unwrap_or(false) {
+        return WindowState::Minimized;
+    }
+    if !window.is_visible().unwrap_or(false) {
+        return WindowState::Hidden;
+    }
+    if window.is_focused().unwrap_or(false) {
+        WindowState::VisibleFocused
+    } else {
+        WindowState::VisibleUnfocused
+    }
 }
 
-fn close_main_window<R: Runtime>(window: WebviewWindow<R>) -> Result<(), CommandError>{
-    window.close().map_err(|e| CommandError::CloseWindowFailed(e))?;
-    Ok(())
-}
+// ── create_window ─────────────────────────────────────────────────────
 
-fn hide_main_window<R: Runtime>(window: WebviewWindow<R>) -> Result<(), CommandError> {
-    window.hide().map_err(|e| CommandError::HideWindowFailed(e))?;
-    Ok(())
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum WindowCommands {
-    Close,
-    Hide,
-}
-
-pub async fn toggle_main_window<R: Runtime>(app_handle: AppHandle<R>, wincmd: WindowCommands) -> Result<(), CommandError> {
-    if let Some(window) = app_handle.get_webview_window("main") {
-        if !window.is_visible().map_err(|e| CommandError::OtherWindowError(e))? 
-        || !window.is_focused().map_err(|e| CommandError::OtherWindowError(e))? {
-            return open_main_window(app_handle).await;
+pub async fn create_main_window(app_handle: &AppHandle) -> Result<(), CommandError> {
+    if app_handle.get_webview_window("main").is_some() {
+        return Ok(());
+    }
+    match tauri::WebviewWindowBuilder::new(app_handle, "main", WebviewUrl::App("index.html".into()))
+        .title("Softwane")
+        .inner_size(560.0, 470.0)
+        .resizable(true)
+        .visible(false)
+        .build() {
+            Ok(_) | Err(tauri::Error::WindowLabelAlreadyExists(..)) => Ok(()),
+            Err(e) => Err(CommandError::CreateWindowFailed(e))
         }
+}
 
-        match wincmd {
-            WindowCommands::Close => { return close_main_window(window);}
-            WindowCommands::Hide => {
-                if window.is_visible().map_err(|e| CommandError::OtherWindowError(e))? {
-                    return hide_main_window(window);
-                }
+// ── show_window ───────────────────────────────────────────────────────
+
+pub async fn show_main_window(app_handle: AppHandle) {
+    {
+        let mgr_state = app_handle.state::<Mutex<WindowManager>>();
+        let mut mgr = mgr_state.lock().unwrap();
+        mgr.stale_timer_closes += mgr.expected_timer_closes;
+        mgr.expected_timer_closes = 0;
+        if let Some(task) = mgr.timer_task.take() {
+            task.abort();
+        }
+    }
+
+    let Some(window) = app_handle.get_webview_window("main") else {
+        if let Err(e) = create_main_window(&app_handle).await {
+            tracing::error!("Failed to create main window in show_window: {e:?}");
+        }
+        return;
+    };
+    if window.is_minimized().unwrap_or(false) {
+        if let Err(e) = window.unminimize() {
+            tracing::warn!("Main window unminimization failed: {e:?}");
+        };
+    }
+    if let Err(e) = window.show() {
+        tracing::warn!("Main window showing failed: {e:?}");
+    }
+    if let Err(e) = window.set_focus() {
+        tracing::warn!("Main window focusing failed: {e:?}");
+    }
+}
+
+// ── toggle_window ─────────────────────────────────────────────────────
+
+pub async fn toggle_main_window(app_handle: AppHandle) {
+    let state = get_main_window_state(&app_handle);
+    match state {
+        WindowState::VisibleFocused | WindowState::VisibleUnfocused => {
+            if let Some(window) = app_handle.get_webview_window("main") {
+                initiate_delayed_close(app_handle.clone(), &window);
             }
         }
-        
-    };
-    open_main_window(app_handle).await
+        _ => show_main_window(app_handle).await,
+    }
 }
 
-pub fn toggle_main_window_sync(app_handle: AppHandle, wincmd: WindowCommands) {
-    tauri::async_runtime::spawn(async move {
-        if let Err(err) = toggle_main_window(app_handle, wincmd).await {
-            tracing::error!("Failed to toggle main window from shortcut: {err:?}.");
+// ── initiate_delayed_close ────────────────────────────────────────────
+
+pub fn initiate_delayed_close(app_handle: AppHandle, window: &WebviewWindow) {
+    let _ = window.hide();
+
+    let mgr_state = app_handle.state::<Mutex<WindowManager>>();
+    let mut mgr = mgr_state.lock().unwrap();
+    if let Some(task) = mgr.timer_task.take() {
+        task.abort();
+    }
+
+    let app_c = app_handle.clone();
+    let label = window.label().to_string();
+    let task = tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(DELAYED_CLOSE_DURATION_SECS)).await;
+        let state = app_c.state::<Mutex<WindowManager>>();
+        let mut mgr = state.lock().unwrap();
+        mgr.expected_timer_closes += 1;
+        if let Some(win) = app_c.get_webview_window(label.as_str()) {
+            let _ = win.close();
         }
     });
+
+    mgr.timer_task = Some(task);
 }
+
+// ── Tauri commands ────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn get_silent_start(app_handle: AppHandle) -> Result<bool, CommandError> {

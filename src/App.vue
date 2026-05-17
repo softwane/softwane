@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import softwaneMark from "./assets/softwane-mark.svg";
 import { useAppearance } from "./composables/useAppearance";
 import { useDraft } from "./composables/useDraft";
@@ -435,7 +436,12 @@ function onShortcutCancel() {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────
 
-onMounted(() => { init(); });
+onMounted(async () => {
+    init();
+    const win = getCurrentWindow();
+    await win.show();
+    await win.setFocus();
+});
 </script>
 
 <template>

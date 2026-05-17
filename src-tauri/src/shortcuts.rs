@@ -39,7 +39,6 @@ use crate::{
     timer_state_machine::{TimerState, commands::StateCommand},
     state::SharedTimerState,
     commands::{CommandError, get_preset_session_durations},
-    window::{WindowCommands, toggle_main_window_sync},
 };
 
 pub const STORE_KEY_SHORTCUT_BINDINGS: &str = "shortcut_bindings";
@@ -385,8 +384,10 @@ fn handle_action(app: &AppHandle, action: ShortcutAction) {
             }
         }
         ShortcutAction::ToggleMainWindow => {
-            // Pure window operation; bypasses the engine entirely.
-            toggle_main_window_sync(app.clone(), WindowCommands::Close);
+            let app_c = app.clone();
+            tauri::async_runtime::spawn(async move {
+                crate::window::toggle_main_window(app_c).await;
+            });
             return;
         }
     };
