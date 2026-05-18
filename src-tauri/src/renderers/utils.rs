@@ -101,6 +101,45 @@ pub(super) fn tsb_to_ct_matrix3(ct_kelvin: u32, s: f64, br: f64) -> ColorTransfo
     rgb_brightness * saturation_to_ct_matrix3(s)
 }
 
+// ── macOS: shared display enumeration ─────────────────────────────────
+
+#[cfg(target_os = "macos")]
+pub(super) fn active_display_ids() -> Result<Vec<u32>, String> {
+    type CGDirectDisplayID = u32;
+    type CGDisplayCount = u32;
+    type CGError = i32;
+
+    const CG_ERROR_SUCCESS: CGError = 0;
+    const MAX_ACTIVE_DISPLAYS: usize = 32;
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    unsafe extern "C" {
+        fn CGGetActiveDisplayList(
+            max_displays: CGDisplayCount,
+            active_displays: *mut CGDirectDisplayID,
+            display_count: *mut CGDisplayCount,
+        ) -> CGError;
+    }
+
+    let mut display_ids = vec![0u32; MAX_ACTIVE_DISPLAYS];
+    let mut display_count: CGDisplayCount = 0;
+
+    let result = unsafe {
+        CGGetActiveDisplayList(
+            MAX_ACTIVE_DISPLAYS as CGDisplayCount,
+            display_ids.as_mut_ptr(),
+            &mut display_count,
+        )
+    };
+
+    if result != CG_ERROR_SUCCESS {
+        return Err(format!("CGGetActiveDisplayList failed: CGError {result}"));
+    }
+
+    display_ids.truncate(display_count as usize);
+    Ok(display_ids)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

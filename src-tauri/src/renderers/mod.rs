@@ -3,6 +3,8 @@
 //! [`RendererDispatcher`] resolves to the correct platform dispatcher at
 //! compile time via `#[cfg]`.  The Engine instantiates one at startup and
 //! calls its methods every frame.
+//! TODO: maybe let each dispatcher receive the renderer events,
+//! because there are many non-blocking renderers
 
 mod utils;
 pub mod events;

@@ -2318,13 +2318,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-color-sync"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "465c2f4a492208698dd4c31aa47ca7947c2520f84051b19d1cdfc70263a55c41"
+dependencies = [
+ "objc2",
+ "objc2-core-foundation",
+]
+
+[[package]]
 name = "objc2-core-foundation"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
 dependencies = [
  "bitflags 2.11.0",
+ "block2",
  "dispatch2",
+ "libc",
  "objc2",
 ]
 
@@ -3512,9 +3524,10 @@ dependencies = [
 name = "softwane"
 version = "0.1.0"
 dependencies = [
- "cc",
  "mimalloc",
  "nalgebra",
+ "objc2-color-sync",
+ "objc2-core-foundation",
  "serde",
  "serde_json",
  "spin_sleep",

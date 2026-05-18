@@ -111,6 +111,7 @@ pub fn run() {
             app.autolaunch().enable().ok();
 
             // ── Panic hook ───────────────────────────────────────────
+            // TODO: crash info should be stored in a distinguished file
             let store_for_hook = store.clone();
             let app_for_hook = app.handle().clone();
             std::panic::set_hook(Box::new(move |info| {

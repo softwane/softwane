@@ -30,7 +30,7 @@ use crate::{
 };
 use super::{
     events::RendererEvent,
-    utils::color_temperature_to_rgb,
+    utils::{color_temperature_to_rgb, active_display_ids},
 };
 
 // ---------------------------------------------------------------------------
@@ -276,27 +276,6 @@ impl CoreGraphicsGammaTweaker {
 // FFI helpers
 // ---------------------------------------------------------------------------
 
-fn active_display_ids() -> Result<Vec<CGDirectDisplayID>, String> {
-    let mut display_ids = vec![0u32; MAX_ACTIVE_DISPLAYS];
-    let mut display_count: CGDisplayCount = 0;
-
-    let result = unsafe {
-        CGGetActiveDisplayList(
-            MAX_ACTIVE_DISPLAYS as CGDisplayCount,
-            display_ids.as_mut_ptr(),
-            &mut display_count,
-        )
-    };
-
-    if result != CG_ERROR_SUCCESS {
-        return Err(format!("CGGetActiveDisplayList failed: CGError {result}"));
-    }
-
-    display_ids.truncate(display_count as usize);
-
-    Ok(display_ids)
-}
-
 fn capture_gamma_table(
     display_id: CGDirectDisplayID,
 ) -> Result<DisplayGammaTable, String> {
@@ -337,7 +316,7 @@ fn capture_gamma_table(
 }
 
 // ---------------------------------------------------------------------------
-// macOS Core Graphics – FFI
+// macOS Core Graphics – FFI (gamma-specific, display enum moved to utils)
 // ---------------------------------------------------------------------------
 
 type CGDirectDisplayID = u32;
@@ -352,12 +331,6 @@ const GAMMA_TABLE_CAPACITY: usize = 256;
 
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
-    fn CGGetActiveDisplayList(
-        max_displays: CGDisplayCount,
-        active_displays: *mut CGDirectDisplayID,
-        display_count: *mut CGDisplayCount,
-    ) -> CGError;
-
     fn CGGetDisplayTransferByTable(
         display: CGDirectDisplayID,
         capacity: CGTableCount,
