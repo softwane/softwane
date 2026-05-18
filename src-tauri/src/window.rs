@@ -100,7 +100,7 @@ pub async fn show_main_window(app_handle: AppHandle) {
 pub async fn toggle_main_window(app_handle: AppHandle) {
     let state = get_main_window_state(&app_handle);
     match state {
-        WindowState::VisibleFocused | WindowState::VisibleUnfocused => {
+        WindowState::VisibleFocused => {
             if let Some(window) = app_handle.get_webview_window("main") {
                 initiate_delayed_close(app_handle.clone(), &window);
             }
@@ -112,7 +112,9 @@ pub async fn toggle_main_window(app_handle: AppHandle) {
 // ── initiate_delayed_close ────────────────────────────────────────────
 
 pub fn initiate_delayed_close(app_handle: AppHandle, window: &WebviewWindow) {
-    let _ = window.hide();
+    if let Err(e) = window.hide() {
+        tracing::warn!("{} window hiding failed: {e:?}", window.label());
+    }
 
     let mgr_state = app_handle.state::<Mutex<WindowManager>>();
     let mut mgr = mgr_state.lock().unwrap();

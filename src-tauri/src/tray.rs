@@ -4,7 +4,7 @@ use tauri::{
     Runtime,
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    tray::TrayIconBuilder,
 };
 
 use crate::{
@@ -68,19 +68,6 @@ fn build_tray(app: &AppHandle, phase_label: &str, durations: [u64; 3]) -> tauri:
                 });
             }
         }})
-        .show_menu_on_left_click(false)
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event {
-                let app_handle = tray.app_handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    window::toggle_main_window(app_handle).await;
-                });
-            }
-        })
         .build(app)?;
     
     Ok(())
