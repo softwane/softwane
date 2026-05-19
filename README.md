@@ -10,8 +10,8 @@ The intended loop is also simple: the user notices the screen has visibly drifte
 
 This repository currently contains:
 
-- A desktop app scaffold built for `Tauri + Rust + Native OS APIs`
-- A Vue 3 preview UI for the reminder phases
+- A desktop app built with `Tauri + Rust + Native OS APIs`
+- A Vue 3 control and settings UI for sessions, preview, visual channels, shortcuts, and startup behavior
 - A product and technical specification derived from the original concept document
 
 ## Product Philosophy
@@ -25,7 +25,7 @@ This repository currently contains:
 
 - `docs/spec.md`: Product and technical specification
 - `src/`: Vue 3 frontend source
-- `src-tauri/`: Tauri backend scaffold in Rust
+- `src-tauri/`: Tauri backend in Rust
 
 ## Prerequisites
 
@@ -135,24 +135,29 @@ This is useful for reviewing the visual phase model without applying system-wide
 
 Implemented:
 
-- Session configuration model
-- Phase model: `Stable`, `JND`, `Evolution`, `Statue`
+- Session configuration model with persisted timer, channel, shortcut, and startup settings
+- Runtime state model: `Idle`, `Preview`, `Progress`, `Settling`, `Rest`, and `Reverse`
 - Sigmoid-based transition curve
-- Real session timer and state machine with `Idle`, `Work`, `Paused`, and `Break`
-- Tray/menu bar presence with basic controls
-- Native shell progress feedback
-- macOS native display adapter using `Core Graphics` transfer tables as a system-wide fallback
+- Real session timer and state machine
+- Tray/menu bar presence with start, break, stop, reset, open, and quit controls
+- Frontend progress channel for live timer and preview updates
+- Configurable quick-start durations
+- Configurable visual channels for saturation, warmth, brightness, cue timing, final intensity, and ramp shape
+- Configurable global shortcuts
+- Launch-at-login and silent-start controls
+- Crash capture and acknowledgement flow
+- macOS native display adapter using `Core Graphics` transfer tables for warmth/brightness and a ColorSync saturation filter
 - Windows native display adapter using the `Magnification API`
-- Vue 3 preview UI
-- Local observability logs for transitions, user actions, config snapshots, and platform failures
+- Vue 3 control, preview, and settings UI
+- Local structured tracing logs for runtime diagnostics
 - Product and technical spec
 
 Not implemented yet:
 
-- Global hotkeys
-- Auto-launch
-- Cue-window and intensity tuning beyond the current defaults
 - Configurable loop behavior
+- Dedicated structured observability event log with stable event categories
+- Tray progress/title updates beyond menu state
+- Broader automated coverage for platform-specific display adapters
 
 ## Verification Notes
 
@@ -164,27 +169,27 @@ Local validation completed:
 
 ## Observability Logs
 
-Local observability events are written as JSON Lines to `observability.jsonl`.
+Runtime diagnostics are written through `tracing` as JSON logs in release builds.
 
 Path details for this project:
 
 - Bundle identifier: `com.softwane.app`
-- Log filename: `observability.jsonl`
+- Log filename prefix: `softwane.log`
 
 Default log locations:
 
-- macOS: `~/Library/Logs/com.softwane.app/observability.jsonl`
-- Windows: `%LOCALAPPDATA%\\com.softwane.app\\logs\\observability.jsonl`
+- macOS: `~/Library/Logs/com.softwane.app/softwane.log.YYYY-MM-DD`
+- Windows: `%LOCALAPPDATA%\\com.softwane.app\\logs\\softwane.log.YYYY-MM-DD`
 
 The backend resolves the path through Tauri's app log directory first and falls back to the app local data directory only if the log directory cannot be resolved.
 
-Logged event categories currently include:
+Current logs include runtime diagnostics such as:
 
 - Session transitions
 - Manual user actions
-- Config snapshots
 - Platform apply failures
 - Platform recovery attempts and recovery failures
+- Startup, shortcut, window, and crash-recovery diagnostics
 
 ## Troubleshooting
 
@@ -217,7 +222,8 @@ pnpm tauri:dev
 
 ## Suggested Next Steps
 
-1. Add global hotkeys for pause and reset
-2. Expose cue-window and intensity tuning beyond the current defaults
-3. Add local observability for transitions, user actions, and platform failures
+1. Add configurable loop behavior
+2. Add a dedicated structured observability event log with stable event names
+3. Implement tray progress/title updates
 4. Tune the transition parameters with manual visual testing on real hardware
+5. Expand automated coverage for timer, shortcut, config, and platform adapter behavior
