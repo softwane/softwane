@@ -1,7 +1,7 @@
 use std::{path::{Path, PathBuf}, slice};
 
 use objc2_color_sync::{
-    ColorSyncProfile, ColorSyncMutableProfile,
+    ColorSyncProfile, ColorSyncMutableProfile, ColorSyncMD5,
     ColorSyncDeviceSetCustomProfiles,
     kColorSyncDisplayDeviceClass, kColorSyncDeviceDefaultProfileID,
     kColorSyncSigRedColorantTag, kColorSyncSigGreenColorantTag, kColorSyncSigBlueColorantTag,
