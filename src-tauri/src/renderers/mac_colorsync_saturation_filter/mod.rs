@@ -10,7 +10,7 @@ use objc2_color_sync::{ColorSyncProfile, ColorSyncMutableProfile, CGDisplayCreat
 use tauri_plugin_store::StoreExt;
 
 use crate::{channels::ChannelValue, engine::EngineEvent, utils::Update};
-use super::{utils::{tsb_to_ct_matrix3, ColorTransformMatrix, active_display_ids}, events::RendererEvent};
+use super::{utils, events::RendererEvent};
 use profile_ops::ProfileInfo;
 
 pub(super) const PROFILE_STORE_KEY: &str = "profile_baseline_path";
@@ -33,9 +33,7 @@ impl MacColorSyncSaturationFilter {
 
     pub(super) fn render(
         &mut self,
-        color_temperature: Update<ChannelValue>,
         saturation: Update<ChannelValue>,
-        brightness: Update<ChannelValue>,
         _app: &AppHandle,
         tx: Sender<EngineEvent>,
     ) {
@@ -48,10 +46,7 @@ impl MacColorSyncSaturationFilter {
             return;
         }
 
-        if !color_temperature.is_changed()
-            && !saturation.is_changed()
-            && !brightness.is_changed()
-        {
+        if !saturation.is_changed() {
             let _ = tx.try_send(EngineEvent::Renderer(
                 RendererEvent::RenderUnappliedDueToUnchanged {
                     renderer_name: self.name,
@@ -60,17 +55,28 @@ impl MacColorSyncSaturationFilter {
             return;
         }
 
+        let s = match saturation.get_value() {
+            ChannelValue::Saturation(s) => s.clamp(0.2, 1.0),
+            _ => panic!("Invalid ChannelValue when render. Expect Saturation, but get: {saturation:?}."),
+        };
+
         // TODO: bucket-based early-exit for unchanged saturation values
         // after Update de-duplication (currently always recomputes on float changes).
 
-        let ct_mat_inv = self.calculate_matrix(
-            *color_temperature.get_value(),
-            *saturation.get_value(),
-            *brightness.get_value(),
-        );
+        let s_mat = utils::saturation_to_ct_matrix3(s);
+        let s_inv = match s_mat.try_inverse() {
+            Some(m) => m,
+            None => {
+                let _ = tx.try_send(EngineEvent::Renderer(RendererEvent::RenderFailed {
+                    renderer_name: self.name,
+                    error: "saturation matrix not invertible".into(),
+                }));
+                return;
+            }
+        };
 
         for (uuid, info) in &self.profiles {
-            let result_mat = info.baseline_mat * ct_mat_inv;
+            let result_mat = info.baseline_mat * s_inv;
 
             unsafe {
                 profile_ops::set_main_colorants(info.mut_profile.as_ref().expect("mut_profile is taken before `prepare_send` (before shutting down)"), &result_mat);
@@ -115,7 +121,7 @@ impl MacColorSyncSaturationFilter {
             return;
         }
 
-        let display_ids = match active_display_ids() {
+        let display_ids = match utils::active_display_ids() {
             Ok(ids) => ids,
             Err(e) => {
                 let _ = tx.try_send(EngineEvent::Renderer(RendererEvent::StartupFailed {
@@ -195,26 +201,6 @@ impl MacColorSyncSaturationFilter {
     }
 
     // ── private helpers ──────────────────────────────────────────────
-}
-
-impl MacColorSyncSaturationFilter {
-    fn calculate_matrix(&self, color_temperature: ChannelValue, saturation: ChannelValue, brightness: ChannelValue) -> Result<ColorTransformMatrix, String> {
-        let ct_kelvin = match color_temperature {
-            ChannelValue::ColorTempKelvin(t) => t,
-            _ => panic!("Invalid ChannelValue when calculate_matrix. Expect Color Temperature, but get: {color_temperature:?}."),
-        };
-        let s = match saturation {
-            ChannelValue::Saturation(s) => s,
-            _ => panic!("Invalid ChannelValue when calculate_matrix. Expect Saturation, but get: {saturation:?}."),
-        };
-        let br = match brightness {
-            ChannelValue::Brightness(b) => b,
-            _ => panic!("Invalid ChannelValue when calculate_matrix. Expect Brightness, but get: {brightness:?}."),
-        };
-
-        let mat = tsb_to_ct_matrix3(ct_kelvin, s, br);
-        mat.try_inverse().ok_or(format!("Color transformation matrix invertible. Matrix: {mat}; color temperature in kelvin: {ct_kelvin}; saturation: {saturation}; brightness: {brightness}"))
-    }
 
     unsafe fn init_profile_for_display(
         &self,
