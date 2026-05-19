@@ -123,8 +123,8 @@ pub fn notify_crash(app: &AppHandle) {
 }
 
 // TODO: update the tray title
-pub fn update_tray_progress(app: &AppHandle, progress: ProgressPayload) -> tauri::Result<()> {
-    let Some(tray) = app.tray_by_id("main") else {
+pub fn update_tray_progress(app: &AppHandle, _progress: ProgressPayload) -> tauri::Result<()> {
+    let Some(_tray) = app.tray_by_id("main") else {
         tracing::warn!("Trying to update tray progress but tray is not found.");
         return Ok(());
     };
