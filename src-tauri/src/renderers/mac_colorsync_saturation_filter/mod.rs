@@ -212,14 +212,14 @@ impl MacColorSyncSaturationFilter {
 
         // Determine the baseline profile path: if the display is currently
         // using one of our profiles, recover the factory baseline.
-        let (baseline_path, baseline_profile) = (|| -> Result<(PathBuf, CFRetained<ColorSyncProfile>), Cow<'static, str>> {
+        let (baseline_path, baseline_profile) = (|| -> Result<(PathBuf, CFRetained<ColorSyncProfile>), String> {
             if !profile_ops::is_our_profile(&path, cache_dir) {
                 return Ok((path, profile));
             }
 
-            let store = app.store("profile_baseline_path.json").map_err(|e| format!("store: {e}").into())?;
+            let store = app.store("profile_baseline_path.json").map_err(|e| format!("store: {e}"))?;
             let uuid_str = CFUUID::new_string(None, Some(&uuid))
-                .ok_or("CFUUID to string".into())?
+                .ok_or("CFUUID to string")?
                 .to_string();
             let stored_path = store.get(PROFILE_STORE_KEY)
                 .and_then(|v| v.get(&uuid_str).cloned())
@@ -228,9 +228,9 @@ impl MacColorSyncSaturationFilter {
             let set_to_factory = || {
                 profile_ops::reset_display_to_factory(&uuid);
                 let factory = ColorSyncProfile::with_display_id(display_id)
-                    .ok_or("factory profile".into())?;
+                    .ok_or("factory profile")?;
                 let factory_url = factory.url(std::ptr::null_mut());
-                let path = factory_url.to_file_path().ok_or("factory path".into())?;
+                let path = factory_url.to_file_path().ok_or("factory path")?;
                 Ok((path, factory))
             };
 
@@ -250,7 +250,7 @@ impl MacColorSyncSaturationFilter {
                 &bp_url,
                 std::ptr::null_mut(),
             )
-            .ok_or("load baseline profile failed".into())?;
+            .ok_or("load baseline profile failed")?;
             profile_ops::apply_profile_to_display(&uuid, &bp_url);
             Ok((bp.clone(), baseline_profile))
         })()?;

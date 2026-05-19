@@ -7,7 +7,7 @@ use objc2_color_sync::{
     kColorSyncSigRedColorantTag, kColorSyncSigGreenColorantTag, kColorSyncSigBlueColorantTag,
 };
 use objc2_core_foundation::{
-    CFRetained, CFURL, CFUUID, CFDictionary, CFNull, kCFNull,
+    CFRetained, CFURL, CFUUID, CFDictionary, kCFNull,
 };
 
 use super::xyz_tag;
