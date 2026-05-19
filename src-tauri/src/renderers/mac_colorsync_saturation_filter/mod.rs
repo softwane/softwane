@@ -219,7 +219,7 @@ impl MacColorSyncSaturationFilter {
 
             let store = app.store("profile_baseline_path.json").map_err(|e| format!("store: {e}"))?;
             let uuid_str = CFUUID::new_string(None, Some(&uuid))
-                .ok_or_else(|| "CFUUID to string".to_string())?
+                .ok_or("CFUUID to string")?
                 .to_string();
             let stored_path = store.get(PROFILE_STORE_KEY)
                 .and_then(|v| v.get(&uuid_str).cloned())
@@ -228,9 +228,9 @@ impl MacColorSyncSaturationFilter {
             let set_to_factory = || {
                 profile_ops::reset_display_to_factory(&uuid);
                 let factory = ColorSyncProfile::with_display_id(display_id)
-                    .ok_or_else(|| "factory profile".to_string())?;
+                    .ok_or("factory profile")?;
                 let factory_url = factory.url(std::ptr::null_mut());
-                let path = factory_url.to_file_path().ok_or_else(|| "factory path".to_string())?;
+                let path = factory_url.to_file_path().ok_or("factory path")?;
                 Ok((path, factory))
             };
 
@@ -250,7 +250,7 @@ impl MacColorSyncSaturationFilter {
                 &bp_url,
                 std::ptr::null_mut(),
             )
-            .ok_or_else(|| "load baseline profile failed".to_string())?;
+            .ok_or("load baseline profile failed")?;
             profile_ops::apply_profile_to_display(&uuid, &bp_url);
             Ok((bp.clone(), baseline_profile))
         })()?;
@@ -276,6 +276,8 @@ impl MacColorSyncSaturationFilter {
             .ok_or("ColorSyncMutableProfile copy")?;
         let baseline_mat = profile_ops::extract_baseline_mat(&baseline_profile)
             .ok_or("extract baseline matrix")?;
+        let baseline_md5 = baseline_profile.md_5();
+
         let uuid_str = CFUUID::new_string(None, Some(&uuid))
             .ok_or("CFUUID to string")?
             .to_string();
@@ -287,6 +289,7 @@ impl MacColorSyncSaturationFilter {
             baseline_path,
             mut_profile,
             baseline_mat,
+            baseline_md5,
             mut_profile_path,
             mut_profile_url,
         }))

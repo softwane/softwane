@@ -1,13 +1,13 @@
 use std::{path::{Path, PathBuf}, slice};
 
 use objc2_color_sync::{
-    ColorSyncProfile, ColorSyncMutableProfile,
+    ColorSyncProfile, ColorSyncMutableProfile, ColorSyncMD5,
     ColorSyncDeviceSetCustomProfiles,
     kColorSyncDisplayDeviceClass, kColorSyncDeviceDefaultProfileID,
     kColorSyncSigRedColorantTag, kColorSyncSigGreenColorantTag, kColorSyncSigBlueColorantTag,
 };
 use objc2_core_foundation::{
-    CFRetained, CFURL, CFUUID, CFDictionary, CFNull, kCFNull,
+    CFRetained, CFURL, CFUUID, CFDictionary, kCFNull,
 };
 
 use super::xyz_tag;
@@ -19,6 +19,7 @@ pub(super) struct ProfileInfo {
     pub baseline_path: PathBuf,
     pub mut_profile: CFRetained<ColorSyncMutableProfile>,
     pub baseline_mat: ColorTransformMatrix,
+    pub baseline_md5: ColorSyncMD5,
     pub mut_profile_path: PathBuf,
     pub mut_profile_url: CFRetained<CFURL>,
 }
@@ -28,6 +29,7 @@ impl std::fmt::Debug for ProfileInfo {
         f.debug_struct("ProfileInfo")
             .field("baseline_path", &self.baseline_path)
             .field("baseline_mat", &self.baseline_mat)
+            .field("baseline_md5", &self.baseline_md5)
             .field("mut_profile_path", &self.mut_profile_path)
             .finish_non_exhaustive()
     }
@@ -115,7 +117,6 @@ pub(super) unsafe fn reset_display_to_factory(uuid: &CFUUID) -> bool {
         &[kColorSyncDeviceDefaultProfileID],
         &[null],
     );
-    let dict: &CFDictionary<objc2_core_foundation::CFString, CFNull> = dict.as_ref();
     ColorSyncDeviceSetCustomProfiles(
         kColorSyncDisplayDeviceClass,
         uuid,
