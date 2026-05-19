@@ -63,11 +63,20 @@ impl MacColorSyncSaturationFilter {
         // TODO: bucket-based early-exit for unchanged saturation values
         // after Update de-duplication (currently always recomputes on float changes).
 
-        let ct_mat_inv = self.calculate_matrix(
+        let ct_mat_inv = match self.calculate_matrix(
             *color_temperature.get_value(),
             *saturation.get_value(),
             *brightness.get_value(),
-        );
+        ) {
+            Ok(mat) => mat,
+            Err(e) => {
+                let _ = tx.try_send(EngineEvent::Renderer(RendererEvent::RenderFailed {
+                    renderer_name: self.name,
+                    error: e,
+                }));
+                return;
+            }
+        };
 
         for (uuid, info) in &self.profiles {
             let result_mat = info.baseline_mat * ct_mat_inv;
@@ -213,7 +222,7 @@ impl MacColorSyncSaturationFilter {
         };
 
         let mat = tsb_to_ct_matrix3(ct_kelvin, s, br);
-        mat.try_inverse().ok_or(format!("Color transformation matrix invertible. Matrix: {mat}; color temperature in kelvin: {ct_kelvin}; saturation: {saturation}; brightness: {brightness}"))
+        mat.try_inverse().ok_or(format!("Color transformation matrix invertible. Matrix: {mat}; color temperature in kelvin: {ct_kelvin:?}; saturation: {saturation:?}; brightness: {brightness:?}"))
     }
 
     unsafe fn init_profile_for_display(
