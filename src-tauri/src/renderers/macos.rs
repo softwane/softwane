@@ -44,14 +44,14 @@ impl MacOSRendererDispatcher {
         let saturation = logic_frame[ChannelType::Saturation];
         let brightness = logic_frame[ChannelType::Brightness];
 
-        self.gamma_tweaker.render(
-            color_temperature,
-            brightness,
-            app,
-            self.tx.clone(),
-        );
+        // self.gamma_tweaker.render(
+        //     color_temperature,
+        //     brightness,
+        //     app,
+        //     self.tx.clone(),
+        // );
         self.saturation_filter
-            .render(saturation, app, self.tx.clone());
+            .render(color_temperature, saturation, brightness, app, self.tx.clone());
     }
 
     pub fn switch_renderer(
