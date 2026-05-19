@@ -79,9 +79,9 @@ impl MacColorSyncSaturationFilter {
             let result_mat = info.baseline_mat * s_inv;
 
             unsafe {
-                profile_ops::set_main_colorants(&info.mut_profile, &result_mat);
+                profile_ops::set_main_colorants(&info.mut_profile.expect("mut_profile is taken before `prepare_send`"), &result_mat);
                 if let Err(e) = profile_ops::verify_and_write_profile(
-                    &info.mut_profile,
+                    &info.mut_profile.expect("mut_profile is taken before `prepare_send`"),
                     &info.mut_profile_path,
                 ) {
                     let _ = tx.try_send(EngineEvent::Renderer(RendererEvent::RenderFailed {
@@ -194,6 +194,12 @@ impl MacColorSyncSaturationFilter {
         ));
     }
 
+    pub(super) fn prepare_send(&mut self) {
+        for info in self.profiles.values_mut() {
+            let _ = info.mut_profile.take();
+        }
+    }
+
     // ── private helpers ──────────────────────────────────────────────
 
     unsafe fn init_profile_for_display(
@@ -287,7 +293,7 @@ impl MacColorSyncSaturationFilter {
 
         Ok((uuid, ProfileInfo {
             baseline_path,
-            mut_profile,
+            Some(mut_profile),
             baseline_mat,
             baseline_md5,
             mut_profile_path,

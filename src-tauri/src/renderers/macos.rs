@@ -91,4 +91,9 @@ impl MacOSRendererDispatcher {
             self.saturation_filter.startup(app, self.tx.clone());
         }
     }
+
+    /// Drop all !send attribute
+    pub fn prepare_send(&mut self) {
+        self.saturation_filter.prepare_send();
+    }
 }

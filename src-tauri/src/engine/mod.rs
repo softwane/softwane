@@ -96,9 +96,11 @@ impl Engine {
 
         if frame_events.shutdown_requested {
             self.shutdown();
+            self.renderers.prepare_send();
             return self;
         }
         if frame_events.shutdown {
+            self.renderers.prepare_send();
             return self;
         }
 

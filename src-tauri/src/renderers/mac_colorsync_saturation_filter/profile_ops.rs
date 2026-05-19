@@ -17,12 +17,14 @@ use super::super::utils::ColorTransformMatrix;
 
 pub(super) struct ProfileInfo {
     pub baseline_path: PathBuf,
-    pub mut_profile: CFRetained<ColorSyncMutableProfile>,
+    pub mut_profile: Option<CFRetained<ColorSyncMutableProfile>>,
     pub baseline_mat: ColorTransformMatrix,
     pub baseline_md5: ColorSyncMD5,
     pub mut_profile_path: PathBuf,
     pub mut_profile_url: CFRetained<CFURL>,
 }
+
+unsafe impl Send for ProfileInfo {}
 
 impl std::fmt::Debug for ProfileInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

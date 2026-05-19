@@ -76,4 +76,9 @@ impl WindowsRendererDispatcher {
             self.color_transformer.startup(app, self.tx.clone());
         }
     }
+
+    /// Drop all !send attribute
+    pub fn prepare_send(&mut self) {
+        // No !send attribute, do nothing.
+    }
 }

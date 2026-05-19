@@ -144,14 +144,20 @@ pub fn run() {
             let shared_state = state::SharedTimerState::new();
             let (event_tx, event_rx) = tokio::sync::mpsc::channel(256);
             
-            let engine = Engine::new(
-                app.handle().clone(),
-                event_rx,
-                event_tx.clone(),
-                store.clone(),
-                shared_state.clone(),
-            );
-            let engine_join = std::thread::spawn(move || engine.run());
+            let app_for_engine = app.handle().clone();
+            let store_for_engine = store.clone();
+            let shared_state_for_engine = shared_state.clone();
+            let event_tx_for_engine = event_tx.clone();
+            let engine_join = std::thread::spawn(move || {
+                Engine::new(
+                    app_for_engine,
+                    event_rx,
+                    event_tx_for_engine,
+                    store_for_engine,
+                    shared_state_for_engine,
+                )
+                .run()
+            });
 
             app.manage(EngineHandle {
                 tx: event_tx,
