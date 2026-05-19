@@ -1,7 +1,7 @@
 use tauri::{
     AppHandle,
     Manager,
-    Runtime,
+    Wry,
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
@@ -15,13 +15,18 @@ use crate::{
     window,
 };
 
+use std::sync::{LazyLock, Mutex};
+
+static TRAY_STATUS_ITEM: LazyLock<Mutex<Option<MenuItem<Wry>>>> = LazyLock::new(|| Mutex::new(None));
+static LAST_TRAY_STATUS: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let durations = get_preset_session_durations(app.clone());
-    build_tray(app, "Idle", durations)
+    build_tray(app, TimerState::Idle, durations)
 }
 
-fn build_tray(app: &AppHandle, phase_label: &str, durations: [u64; 3]) -> tauri::Result<()> {
-    let menu = build_menu(app, phase_label, durations)?;
+fn build_tray(app: &AppHandle, state: TimerState, durations: [u64; 3]) -> tauri::Result<()> {
+    let menu = build_menu(app, state, durations)?;
 
     // Build icon
     let (icon, use_template) = if cfg!(target_os = "macos") {
@@ -73,7 +78,8 @@ fn build_tray(app: &AppHandle, phase_label: &str, durations: [u64; 3]) -> tauri:
     Ok(())
 }
 
-fn build_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str, durations: [u64; 3]) -> Result<Menu<R>, tauri::Error> {
+fn build_menu(app: &AppHandle, state: TimerState, durations: [u64; 3]) -> Result<Menu<Wry>, tauri::Error> {
+    let phase_label = state.label();
     let is_idle = phase_label == "Idle";
     let is_progress = phase_label == "Progress";
     let is_settling = phase_label == "Settling";
@@ -81,6 +87,8 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str, durations: [u64
 
     let seperator = PredefinedMenuItem::separator(app)?;
 
+    let status = MenuItem::with_id(app, "status", tray_status_label(state), false, None::<&str>)?;
+    remember_tray_status_item(&status);
     let open_win = MenuItem::with_id(app, "open", "Open window", true, None::<&str>)?;
 
     let start_preset1_label = format!("start a {} min session", durations[0] / 60_000);
@@ -100,6 +108,8 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, phase_label: &str, durations: [u64
     let menu = Menu::with_items(
         app,
         &[
+            &status,
+            &seperator,
             &open_win,
             &seperator,
             &start_preset1,
@@ -122,12 +132,24 @@ pub fn notify_crash(app: &AppHandle) {
     }
 }
 
-// TODO: update the tray title
-pub fn update_tray_progress(app: &AppHandle, _progress: ProgressPayload) -> tauri::Result<()> {
-    let Some(_tray) = app.tray_by_id("main") else {
-        tracing::warn!("Trying to update tray progress but tray is not found.");
-        return Ok(());
-    };
+pub fn update_tray_progress(app: &AppHandle, progress: ProgressPayload) -> tauri::Result<()> {
+    let status = tray_status_label(progress.timer_state);
+
+    #[cfg(windows)]
+    {
+        let Some(tray) = app.tray_by_id("main") else {
+            tracing::warn!("Trying to update tray progress but tray is not found.");
+            return Ok(());
+        };
+        tray.set_tooltip(Some(&status))?;
+    }
+
+    #[cfg(not(windows))]
+    let _ = app;
+
+    if mark_tray_status_changed(&status) {
+        update_tray_status_item(status)?;
+    }
 
     Ok(())
 }
@@ -161,7 +183,88 @@ fn refresh_tray_menu_inner(
         return Ok(());
     };
 
-    let menu = build_menu(app, state.label(), durations)?;
+    let menu = build_menu(app, state, durations)?;
     tray.set_menu(Some(menu))?;
     Ok(())
+}
+
+fn remember_tray_status_item(item: &MenuItem<Wry>) {
+    if let Ok(mut status_item) = TRAY_STATUS_ITEM.lock() {
+        *status_item = Some(item.clone());
+    }
+}
+
+fn update_tray_status_item(status: String) -> tauri::Result<()> {
+    let item = TRAY_STATUS_ITEM.lock().ok().and_then(|item| item.clone());
+    if let Some(item) = item {
+        item.set_text(status)?;
+    }
+
+    Ok(())
+}
+
+fn mark_tray_status_changed(status: &str) -> bool {
+    let Ok(mut last_status) = LAST_TRAY_STATUS.lock() else {
+        return true;
+    };
+    if last_status.as_deref() == Some(status) {
+        return false;
+    }
+    *last_status = Some(status.to_string());
+    true
+}
+
+fn tray_status_label(state: TimerState) -> String {
+    match state {
+        TimerState::Idle => "Idle".to_string(),
+        TimerState::Preview { .. } => "Preview".to_string(),
+        TimerState::Progress { elapsed_ms, target_duration_ms } => {
+            format!("Work left: {}", format_remaining_ms(target_duration_ms.saturating_sub(elapsed_ms)))
+        },
+        TimerState::Settling { elapsed_ms, target_duration_ms } => {
+            format!("Settling: {}", format_remaining_ms(target_duration_ms.saturating_sub(elapsed_ms)))
+        },
+        TimerState::Rest => "Rest".to_string(),
+        TimerState::Reverse { elapsed_ms, target_duration_ms } => {
+            format!("Resuming: {}", format_remaining_ms(target_duration_ms.saturating_sub(elapsed_ms)))
+        },
+    }
+}
+
+fn format_remaining_ms(ms: u64) -> String {
+    let total_seconds = ms.div_ceil(1000);
+    let minutes = total_seconds / 60;
+    let seconds = total_seconds % 60;
+    format!("{minutes:02}:{seconds:02}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_active_work_remaining_time_for_tray_menu() {
+        let state = TimerState::Progress {
+            elapsed_ms: 61_200,
+            target_duration_ms: 25 * 60_000,
+        };
+
+        assert_eq!(tray_status_label(state), "Work left: 23:59");
+    }
+
+    #[test]
+    fn clamps_over_elapsed_sessions_to_zero_remaining() {
+        let state = TimerState::Settling {
+            elapsed_ms: 8_000,
+            target_duration_ms: 5_000,
+        };
+
+        assert_eq!(tray_status_label(state), "Settling: 00:00");
+    }
+
+    #[test]
+    fn rounds_partial_seconds_up_for_display() {
+        assert_eq!(format_remaining_ms(1), "00:01");
+        assert_eq!(format_remaining_ms(60_001), "01:01");
+    }
 }
