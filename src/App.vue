@@ -52,9 +52,9 @@ const themeModeOptions = [
   { id: "light", label: "Light", description: "Always keep the app in light mode." },
 ];
 const channelConflicts = {
-  saturation: [], //["color_temp", "brightness"],
-  color_temp: [], //["saturation"],
-  brightness: [], //["saturation"],
+  saturation: ["color_temp", "brightness"],
+  color_temp: ["saturation"],
+  brightness: ["saturation"],
 };
 
 const { resolvedTheme, setThemeMode, themeMode } = useAppearance();
@@ -603,7 +603,7 @@ onMounted(async () => {
                 <template v-if="type === 'saturation'">
                   <label class="field field-compact">
                     <span>Final color {{ formatPercent(getChannelTargetValueDisplay(type, findChannelConfig(type))) }}</span>
-                    <input type="range" min="0.1" max="1" step="0.01" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
+                    <input type="range" min="0.2" max="1" step="0.01" :value="getChannelTargetValueDisplay(type, findChannelConfig(type))" @input="onChannelTargetChange(type, $event.target.value)" />
                   </label>
                 </template>
                 <template v-else-if="type === 'color_temp'">

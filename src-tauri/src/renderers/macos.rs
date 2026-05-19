@@ -1,9 +1,7 @@
 //! `MacOSRendererDispatcher` — platform dispatcher for `target_os = "macos"`.
 //!
-//! Forwards saturation, colour-temperature, and brightness channel values
-//! to the unified [`MacColorSyncSaturationFilter`] which modifies both the
-//! ICC profile colorant matrix (rXYZ/gXYZ/bXYZ) and the vcgt tag in a single
-//! profile via `ColorSyncDeviceSetCustomProfiles`.
+//! Owns a single [`CoreGraphicsGammaRenderer`] sub-renderer and forwards
+//! saturation, colour-temperature, and brightness channel values to it.
 
 use std::sync::Arc;
 
@@ -22,7 +20,8 @@ use super::{
 #[derive(Debug)]
 pub struct MacOSRendererDispatcher {
     tx: Sender<EngineEvent>,
-    renderer: MacColorSyncSaturationFilter,
+    saturation_filter: MacColorSyncSaturationFilter,
+    gamma_tweaker: CoreGraphicsGammaTweaker,
 }
 
 impl MacOSRendererDispatcher {
@@ -33,7 +32,8 @@ impl MacOSRendererDispatcher {
     ) -> Self {
         let mut this = Self {
             tx,
-            renderer: MacColorSyncSaturationFilter::new(),
+            saturation_filter: MacColorSyncSaturationFilter::new(),
+            gamma_tweaker: CoreGraphicsGammaTweaker::new(),
         };
         this.switch_renderer(states, app);
         this
@@ -44,13 +44,14 @@ impl MacOSRendererDispatcher {
         let saturation = logic_frame[ChannelType::Saturation];
         let brightness = logic_frame[ChannelType::Brightness];
 
-        self.renderer.render(
+        self.gamma_tweaker.render(
             color_temperature,
-            saturation,
             brightness,
             app,
             self.tx.clone(),
         );
+        self.saturation_filter
+            .render(saturation, app, self.tx.clone());
     }
 
     pub fn switch_renderer(
@@ -58,35 +59,41 @@ impl MacOSRendererDispatcher {
         states: ChannelSwitchStates,
         app: &AppHandle,
     ) {
-        let any_on = states[ChannelType::Saturation]
-            || states[ChannelType::ColorTemp]
-            || states[ChannelType::Brightness];
-        if any_on {
-            self.renderer.startup(app, self.tx.clone());
+        if states[ChannelType::ColorTemp] || states[ChannelType::Brightness] {
+            self.gamma_tweaker.startup(app, self.tx.clone());
         } else {
-            self.renderer.shutdown(app, self.tx.clone());
+            self.gamma_tweaker.shutdown(app, self.tx.clone());
+        }
+
+        if states[ChannelType::Saturation] {
+            self.saturation_filter.startup(app, self.tx.clone());
+        } else {
+            self.saturation_filter.shutdown(app, self.tx.clone());
         }
     }
 
     pub fn shutdown(&mut self, app: &AppHandle) {
-        self.renderer.shutdown(app, self.tx.clone());
+        self.gamma_tweaker.shutdown(app, self.tx.clone());
+        self.saturation_filter.shutdown(app, self.tx.clone());
     }
 
     pub fn shutdown_on_main_thread(&mut self, app: &AppHandle) {
-        self.renderer.shutdown(app, self.tx.clone());
+        self.gamma_tweaker.shutdown(app, self.tx.clone());
+        self.saturation_filter.shutdown(app, self.tx.clone());
     }
 
     pub fn reset(&mut self, states: ChannelSwitchStates, app: &AppHandle) {
         self.shutdown(app);
-        if states[ChannelType::Saturation]
-            || states[ChannelType::ColorTemp]
-            || states[ChannelType::Brightness]
-        {
-            self.renderer.startup(app, self.tx.clone());
+        if states[ChannelType::ColorTemp] || states[ChannelType::Brightness] {
+            self.gamma_tweaker.startup(app, self.tx.clone());
+        }
+        if states[ChannelType::Saturation] {
+            self.saturation_filter.startup(app, self.tx.clone());
         }
     }
 
+    /// Drop all !send attribute
     pub fn prepare_send(&mut self) {
-        self.renderer.prepare_send();
+        self.saturation_filter.prepare_send();
     }
 }
