@@ -1,11 +1,11 @@
 mod profile_ops;
 mod xyz_tag;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use tauri::{AppHandle, Manager};
 use tokio::sync::mpsc::Sender;
-use objc2_core_foundation::{CFURL, CFUUID};
+use objc2_core_foundation::{CFURL, CFUUID, CFRetained};
 use objc2_color_sync::{ColorSyncProfile, ColorSyncMutableProfile, CGDisplayCreateUUIDFromDisplayID};
 use tauri_plugin_store::StoreExt;
 
@@ -19,7 +19,7 @@ pub(super) const PROFILE_STORE_KEY: &str = "profile_baseline_path";
 pub(super) struct MacColorSyncSaturationFilter {
     name: &'static str,
     switch_on: bool,
-    profiles: HashMap<CFUUID, ProfileInfo>,
+    profiles: HashMap<CFRetained<CFUUID>, ProfileInfo>,
 }
 
 impl MacColorSyncSaturationFilter {
@@ -201,7 +201,7 @@ impl MacColorSyncSaturationFilter {
         display_id: u32,
         app: &AppHandle,
         cache_dir: &std::path::Path,
-    ) -> Result<(CFUUID, ProfileInfo), String> {
+    ) -> Result<(CFRetained<CFUUID>, ProfileInfo), String> {
         let uuid = CGDisplayCreateUUIDFromDisplayID(display_id);
 
         let profile = ColorSyncProfile::with_display_id(display_id)
@@ -212,14 +212,14 @@ impl MacColorSyncSaturationFilter {
 
         // Determine the baseline profile path: if the display is currently
         // using one of our profiles, recover the factory baseline.
-        let (baseline_path, baseline_profile) = (|| {
+        let (baseline_path, baseline_profile) = (|| -> Result<(PathBuf, CFRetained<ColorSyncProfile>), String> {
             if !profile_ops::is_our_profile(&path, cache_dir) {
                 return Ok((path, profile));
             }
 
             let store = app.store("profile_baseline_path.json").map_err(|e| format!("store: {e}"))?;
             let uuid_str = CFUUID::new_string(None, Some(&uuid))
-                .ok_or("CFUUID to string")?
+                .ok_or_else(|| "CFUUID to string".to_string())?
                 .to_string();
             let stored_path = store.get(PROFILE_STORE_KEY)
                 .and_then(|v| v.get(&uuid_str).cloned())
@@ -228,9 +228,9 @@ impl MacColorSyncSaturationFilter {
             let set_to_factory = || {
                 profile_ops::reset_display_to_factory(&uuid);
                 let factory = ColorSyncProfile::with_display_id(display_id)
-                    .ok_or("factory profile")?;
+                    .ok_or_else(|| "factory profile".to_string())?;
                 let factory_url = factory.url(std::ptr::null_mut());
-                let Ok(path) = factory_url.to_file_path().ok_or("factory path")?;
+                let path = factory_url.to_file_path().ok_or_else(|| "factory path".to_string())?;
                 Ok((path, factory))
             };
 
@@ -250,7 +250,7 @@ impl MacColorSyncSaturationFilter {
                 &bp_url,
                 std::ptr::null_mut(),
             )
-            .ok_or("load baseline profile failed")?;
+            .ok_or_else(|| "load baseline profile failed".to_string())?;
             profile_ops::apply_profile_to_display(&uuid, &bp_url);
             Ok((bp.clone(), baseline_profile))
         })()?;
@@ -276,8 +276,6 @@ impl MacColorSyncSaturationFilter {
             .ok_or("ColorSyncMutableProfile copy")?;
         let baseline_mat = profile_ops::extract_baseline_mat(&baseline_profile)
             .ok_or("extract baseline matrix")?;
-        let baseline_md5 = baseline_profile.md_5();
-
         let uuid_str = CFUUID::new_string(None, Some(&uuid))
             .ok_or("CFUUID to string")?
             .to_string();
@@ -289,7 +287,6 @@ impl MacColorSyncSaturationFilter {
             baseline_path,
             mut_profile,
             baseline_mat,
-            baseline_md5,
             mut_profile_path,
             mut_profile_url,
         }))

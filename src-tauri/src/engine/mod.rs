@@ -36,7 +36,7 @@ const TARGET_FRAME_INTERVAL: Duration = Duration::from_micros(16_667);
 #[derive(Debug)]
 pub struct EngineHandle {
     pub tx: Sender<EngineEvent>,
-    pub join: Mutex<Option<JoinHandle<Engine>>>,
+    pub join: Mutex<Option<JoinHandle<()>>>,
 }
 
 pub struct Engine {
@@ -85,64 +85,66 @@ impl Engine {
         }
     }
 
-    pub fn run(mut self) -> Self { loop {
-        let frame_started_at = Instant::now();
-        let dt_ms = frame_started_at
-            .saturating_duration_since(self.last_frame_at)
-            .as_millis() as u64;
-        self.last_frame_at = frame_started_at;
+    pub fn run(mut self) {
+        loop {
+            let frame_started_at = Instant::now();
+            let dt_ms = frame_started_at
+                .saturating_duration_since(self.last_frame_at)
+                .as_millis() as u64;
+            self.last_frame_at = frame_started_at;
 
-        let mut frame_events = self.collect_events();
+            let mut frame_events = self.collect_events();
 
-        if frame_events.shutdown_requested {
-            self.shutdown();
-            return self;
-        }
-        if frame_events.shutdown {
-            return self;
-        }
+            if frame_events.shutdown_requested {
+                self.shutdown();
+                return;
+            }
+            if frame_events.shutdown {
+                return;
+            }
 
-        // force_reset first
-        if frame_events.force_reset {
-            self.timer.reset();
-            self.channels.reset();
-            self.renderers.reset(self.channels.switch_states(), &self.app);
-        }
+            // force_reset first
+            if frame_events.force_reset {
+                self.timer.reset();
+                self.channels.reset();
+                self.renderers.reset(self.channels.switch_states(), &self.app);
+            }
 
-        // State advance
-        self.timer.handle_commands(&mut frame_events);
-        self.timer.tick(dt_ms, &mut frame_events);
+            // State advance
+            self.timer.handle_commands(&mut frame_events);
+            self.timer.tick(dt_ms, &mut frame_events);
 
-        // Channel calculation
-        self.channels.handle_commands(&mut frame_events);
-        self.channels.tick(self.timer.state(), &mut frame_events);
-        let logic_frame = Arc::new(self.channels.logic_frame());
+            // Channel calculation
+            self.channels.handle_commands(&mut frame_events);
+            self.channels.tick(self.timer.state(), &mut frame_events);
+            let logic_frame = Arc::new(self.channels.logic_frame());
 
-        // Persistence
-        if frame_events.need_persist.timer_state_machine {
-            crate::timer_state_machine::persist(&self.timer, &self.store);
-        }
-        if let Some(channel_types) = frame_events.need_persist.channels_system.take() {
-            for ct in channel_types {
-                crate::channels::persist_channel(&self.channels, ct, &self.store);
+            // Persistence
+            if frame_events.need_persist.timer_state_machine {
+                crate::timer_state_machine::persist(&self.timer, &self.store);
+            }
+            if let Some(channel_types) = frame_events.need_persist.channels_system.take() {
+                for ct in channel_types {
+                    crate::channels::persist_channel(&self.channels, ct, &self.store);
+                }
+            }
+
+            // Render (side effects)
+            if frame_events.switch_changed {
+                self.renderers.switch_renderer(self.channels.switch_states(), &self.app);
+            }
+            self.renderers.dispatch(logic_frame, &self.app);
+
+            // Update frontend state
+            self.update_frontend_state(&frame_events);
+
+            // Frame pacing
+            let elapsed = frame_started_at.elapsed();
+            if elapsed < self.recommended_tick_interval() {
+                std::thread::sleep(self.recommended_tick_interval() - elapsed);
             }
         }
-
-        // Render (side effects)
-        if frame_events.switch_changed {
-            self.renderers.switch_renderer(self.channels.switch_states(), &self.app);
-        }
-        self.renderers.dispatch(logic_frame, &self.app);
-
-        // Update frontend state
-        self.update_frontend_state(&frame_events);
-
-        // Frame pacing
-        let elapsed = frame_started_at.elapsed();
-        if elapsed < self.recommended_tick_interval() {
-            std::thread::sleep(self.recommended_tick_interval() - elapsed);
-        }
-    }}
+    }
 
     fn collect_events(&mut self) -> FrameEvents {
         let mut frame_events = FrameEvents::default();

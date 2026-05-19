@@ -46,5 +46,5 @@ pub(super) fn encode_xyz_tag(xyz: [f64; 3]) -> CFRetained<CFData> {
     write_s15f16(&mut bytes[12..16], xyz[1]);
     write_s15f16(&mut bytes[16..20], xyz[2]);
 
-    unsafe { CFData::from_bytes(&bytes) }
+    CFData::from_bytes(&bytes)
 }
