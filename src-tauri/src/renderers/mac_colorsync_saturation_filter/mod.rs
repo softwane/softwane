@@ -33,7 +33,9 @@ impl MacColorSyncSaturationFilter {
 
     pub(super) fn render(
         &mut self,
+        color_temperature: Update<ChannelValue>,
         saturation: Update<ChannelValue>,
+        brightness: Update<ChannelValue>,
         _app: &AppHandle,
         tx: Sender<EngineEvent>,
     ) {
@@ -46,7 +48,9 @@ impl MacColorSyncSaturationFilter {
             return;
         }
 
-        if !saturation.is_changed() {
+        let need_colorants = saturation.is_changed();
+        let need_vcgt = color_temperature.is_changed() || brightness.is_changed();
+        if !need_colorants && !need_vcgt {
             let _ = tx.try_send(EngineEvent::Renderer(
                 RendererEvent::RenderUnappliedDueToUnchanged {
                     renderer_name: self.name,
@@ -55,35 +59,76 @@ impl MacColorSyncSaturationFilter {
             return;
         }
 
-        let s = match saturation.get_value() {
-            ChannelValue::Saturation(s) => s.clamp(0.2, 1.0),
-            _ => panic!("Invalid ChannelValue when render. Expect Saturation, but get: {saturation:?}."),
-        };
-
         // TODO: bucket-based early-exit for unchanged saturation values
         // after Update de-duplication (currently always recomputes on float changes).
 
-        let s_mat = utils::saturation_to_ct_matrix3(s);
-        let s_inv = match s_mat.try_inverse() {
-            Some(m) => m,
-            None => {
-                let _ = tx.try_send(EngineEvent::Renderer(RendererEvent::RenderFailed {
-                    renderer_name: self.name,
-                    error: "saturation matrix not invertible".into(),
-                }));
-                return;
+        // 预计算 colorant 矩阵
+        let s_inv = if need_colorants {
+            let s = match saturation.get_value() {
+                ChannelValue::Saturation(s) => s.clamp(0.2, 1.0),
+                _ => panic!("Invalid ChannelValue when render. Expect Saturation, but get: {saturation:?}."),
+            };
+            let s_mat = utils::saturation_to_ct_matrix3(s);
+            match s_mat.try_inverse() {
+                Some(m) => Some(m),
+                None => {
+                    let _ = tx.try_send(EngineEvent::Renderer(RendererEvent::RenderFailed {
+                        renderer_name: self.name,
+                        error: "saturation matrix not invertible".into(),
+                    }));
+                    return;
+                }
             }
+        } else {
+            None
+        };
+
+        // 预计算 vcgt 通道系数
+        let vcgt_coefs = if need_vcgt {
+            let ct_kelvin = match color_temperature.get_value() {
+                ChannelValue::ColorTempKelvin(k) => *k,
+                _ => panic!("Invalid ChannelValue when calculate_matrix. Expect Color Temperature, but get: {color_temperature:?}."),
+            };
+            let br = match brightness.get_value() {
+                ChannelValue::Brightness(b) => b.clamp(0.0, 1.0),
+                _ => panic!("Invalid ChannelValue when calculate_matrix. Expect Brightness, but get: {brightness:?}."),
+            };
+            let (r, g, b_val) = utils::color_temperature_to_rgb(ct_kelvin);
+            Some((r * br, g * br, b_val * br))
+        } else {
+            None
         };
 
         for (uuid, info) in &self.profiles {
-            let result_mat = info.baseline_mat * s_inv;
+            let mut_profile = match info.mut_profile.as_ref() {
+                Some(mp) => mp,
+                None => {
+                    tracing::error!("mut_profile already taken for {}", info.baseline_path.display());
+                    continue;
+                }
+            };
 
             unsafe {
-                profile_ops::set_main_colorants(info.mut_profile.as_ref().expect("mut_profile is taken before `prepare_send` (before shutting down)"), &result_mat);
-                if let Err(e) = profile_ops::verify_and_write_profile(
-                    info.mut_profile.as_ref().expect("mut_profile is taken before `prepare_send` (before shutting down)"),
-                    &info.mut_profile_path,
-                ) {
+                // 饱和度 → colorants
+                if let Some(ref s_inv) = s_inv {
+                    let result_mat = info.baseline_mat * s_inv;
+                    tracing::debug!("set_colorants: {}, matrix={result_mat:.2}", info.baseline_path.display());
+                    profile_ops::set_main_colorants(mut_profile, &result_mat);
+                }
+
+                // 色温+亮度 → vcgt
+                if let (Some((r, g, b_val)), Some(ref baseline)) = (vcgt_coefs, &info.vcgt_baseline) {
+                    let coef = nalgebra::Matrix3::from_diagonal(
+                        &nalgebra::Vector3::new(r, g, b_val),
+                    );
+                    let modified = coef * baseline;
+                    let vcgt_data = profile_ops::encode_vcgt_table(&modified);
+                    let vcgt_sig = objc2_core_foundation::CFString::from_str("vcgt");
+                    mut_profile.set_tag(&vcgt_sig, &vcgt_data);
+                }
+
+                // 验证 + 写出 + 应用
+                if let Err(e) = profile_ops::verify_and_write_profile(mut_profile, &info.mut_profile_path) {
                     let _ = tx.try_send(EngineEvent::Renderer(RendererEvent::RenderFailed {
                         renderer_name: self.name,
                         error: format!("verify/write: {e}"),
@@ -141,6 +186,7 @@ impl MacColorSyncSaturationFilter {
                     self.profiles.insert(uuid, info);
                 }
                 Err(e) => {
+                    tracing::warn!("initialize display {display_id} fail: {e}");
                     let _ = tx.try_send(EngineEvent::Renderer(
                         RendererEvent::StartupFailed {
                             renderer_name: self.name,
@@ -243,7 +289,7 @@ impl MacColorSyncSaturationFilter {
             let bp = match stored_path {
                 Some(ref bp) => bp,
                 None => return set_to_factory(),
-            };            
+            };
             if !bp.exists() {
                 return set_to_factory();
             }
@@ -284,6 +330,9 @@ impl MacColorSyncSaturationFilter {
             .ok_or("extract baseline matrix")?;
         let baseline_md5 = baseline_profile.md_5();
 
+        // Read vcgt baseline
+        let (vcgt_baseline, _vcgt_sample_count) = profile_ops::read_vcgt_baseline(&baseline_profile);
+
         let uuid_str = CFUUID::new_string(None, Some(&uuid))
             .ok_or("CFUUID to string")?
             .to_string();
@@ -291,6 +340,7 @@ impl MacColorSyncSaturationFilter {
         let mut_profile_url = CFURL::from_file_path(&mut_profile_path)
             .ok_or("mut_profile_path to URL")?;
 
+        tracing::info!("display {display_id} (uuid: {uuid_str}) initialized, has_vcgt={}", vcgt_baseline.is_some());
         Ok((uuid, ProfileInfo {
             baseline_path,
             mut_profile: Some(mut_profile),
@@ -298,6 +348,7 @@ impl MacColorSyncSaturationFilter {
             baseline_md5,
             mut_profile_path,
             mut_profile_url,
+            vcgt_baseline,
         }))
     }
 }

@@ -144,13 +144,13 @@ impl_channel_array_type_index!(ChannelSwitchStates, bool);
 
 impl ChannelType {
     pub const fn conflicts(&self) -> &'static [ChannelType] {
-        #[cfg(target_os = "windows")]
+        // #[cfg(target_os = "windows")]
         return &[];
-        #[cfg(target_os = "macos")]
-        match self {
-            Self::Brightness => &[Self::Saturation],
-            Self::ColorTemp => &[Self::Saturation],
-            Self::Saturation => &[Self::Brightness, Self::ColorTemp],
-        }
+        // #[cfg(target_os = "macos")]
+        // match self {
+        //     Self::Brightness => &[Self::Saturation],
+        //     Self::ColorTemp => &[Self::Saturation],
+        //     Self::Saturation => &[Self::Brightness, Self::ColorTemp],
+        // }
     }
 }
