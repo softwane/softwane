@@ -32,6 +32,9 @@ fn build_tray(app: &AppHandle, state: TimerState, durations: [u64; 3]) -> tauri:
     let (icon, use_template) = if cfg!(target_os = "macos") {
         let icon_bytes = include_bytes!("../icons/icon-tray-template.png");
         (Image::from_bytes(icon_bytes).unwrap(), true)
+    } else if cfg!(target_os = "windows") {
+        let icon_bytes = include_bytes!("../icons/icon-tray-windows.png");
+        (Image::from_bytes(icon_bytes).unwrap(), false)
     } else {
         (app.default_window_icon().unwrap().clone(), false)
     };

@@ -5,3 +5,5 @@ dist/
 gen/
 .cursor/
 .claude/
+.superpowers/
+*-plan.html

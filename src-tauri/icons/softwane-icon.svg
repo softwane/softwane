@@ -1,38 +1,39 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="softwane-bg" x1="86" y1="58" x2="416" y2="452" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F7F0E1"/>
-      <stop offset="0.42" stop-color="#D9C29B"/>
-      <stop offset="1" stop-color="#7B5327"/>
+    <linearGradient id="softwane-window" x1="100" y1="90" x2="414" y2="424" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#312016"/>
+      <stop offset="0.56" stop-color="#18110D"/>
+      <stop offset="1" stop-color="#0C0806"/>
     </linearGradient>
-    <linearGradient id="softwane-stone" x1="150" y1="112" x2="362" y2="388" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFF9F0"/>
-      <stop offset="1" stop-color="#E8D7BC"/>
+    <linearGradient id="softwane-panel" x1="122" y1="116" x2="390" y2="386" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF8EE"/>
+      <stop offset="0.62" stop-color="#F1E4D1"/>
+      <stop offset="1" stop-color="#E1C8A6"/>
     </linearGradient>
-    <radialGradient id="softwane-haze" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(170 136) rotate(41.3478) scale(269.849)">
-      <stop stop-color="white" stop-opacity="0.9"/>
-      <stop offset="1" stop-color="white" stop-opacity="0"/>
-    </radialGradient>
-    <filter id="softwane-shadow" x="63" y="58" width="386" height="396" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
-      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-      <feOffset dy="24"/>
-      <feGaussianBlur stdDeviation="24"/>
-      <feColorMatrix type="matrix" values="0 0 0 0 0.262745 0 0 0 0 0.176471 0 0 0 0 0.0705882 0 0 0 0.22 0"/>
-      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
-      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    <linearGradient id="softwane-wave" x1="136" y1="220" x2="376" y2="296" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E4C66F"/>
+      <stop offset="0.48" stop-color="#C89035"/>
+      <stop offset="1" stop-color="#A97022"/>
+    </linearGradient>
+    <linearGradient id="softwane-dot" x1="324" y1="132" x2="374" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8C777"/>
+      <stop offset="1" stop-color="#B77B24"/>
+    </linearGradient>
+    <linearGradient id="softwane-rule" x1="150" y1="340" x2="362" y2="374" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B77D2B"/>
+      <stop offset="1" stop-color="#7C4C18"/>
+    </linearGradient>
+    <filter id="window-shadow" x="54" y="58" width="404" height="404" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="rgba(48,30,15,0.24)"/>
+    </filter>
+    <filter id="panel-shadow" x="94" y="100" width="324" height="310" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="9" stdDeviation="10" flood-color="rgba(0,0,0,0.2)"/>
     </filter>
   </defs>
-  <g transform="translate(31 31) scale(0.87890625)">
-    <rect width="512" height="512" rx="132" fill="url(#softwane-bg)"/>
-    <rect width="512" height="512" rx="132" fill="url(#softwane-haze)"/>
-    <path d="M70 398C135 359 211 339 289 342C350 345 405 364 442 391" stroke="#FFF7EA" stroke-opacity="0.32" stroke-width="18" stroke-linecap="round"/>
-    <g filter="url(#softwane-shadow)">
-      <path fill-rule="evenodd" clip-rule="evenodd" d="M149 108C149 92.536 161.536 80 177 80H349C364.464 80 377 92.536 377 108V143C377 158.464 364.464 171 349 171H239V217H313C328.464 217 341 229.536 341 245V273C341 288.464 328.464 301 313 301H239V341H349C364.464 341 377 353.536 377 369V404C377 419.464 364.464 432 349 432H177C161.536 432 149 419.464 149 404V108ZM282 164C270.954 164 262 172.954 262 184C262 195.046 270.954 204 282 204H351C362.046 204 371 195.046 371 184C371 172.954 362.046 164 351 164H282ZM322 296C309.297 296 299 306.297 299 319C299 331.703 309.297 342 322 342H377C389.703 342 400 331.703 400 319C400 306.297 389.703 296 377 296H322ZM278 236C267.507 236 259 244.507 259 255C259 265.493 267.507 274 278 274H336C346.493 274 355 265.493 355 255C355 244.507 346.493 236 336 236H278Z" fill="url(#softwane-stone)"/>
-      <path d="M236 128C245.61 110.314 265.409 98 287.5 98H353" stroke="white" stroke-opacity="0.5" stroke-width="16" stroke-linecap="round"/>
-    </g>
-    <circle cx="366" cy="186" r="18" fill="#B68752" fill-opacity="0.35"/>
-    <circle cx="395" cy="319" r="25" fill="#8B5E2C" fill-opacity="0.28"/>
-    <circle cx="351" cy="255" r="19" fill="#A06E38" fill-opacity="0.24"/>
-  </g>
+  <rect x="34" y="34" width="444" height="444" rx="126" fill="#FFFFFF"/>
+  <rect x="82" y="78" width="348" height="356" rx="98" fill="url(#softwane-window)" filter="url(#window-shadow)"/>
+  <rect x="122" y="118" width="268" height="268" rx="64" fill="url(#softwane-panel)" filter="url(#panel-shadow)"/>
+  <circle cx="348" cy="156" r="24" fill="url(#softwane-dot)"/>
+  <path d="M138 258C180 214 216 214 256 258C296 302 332 302 374 258" stroke="url(#softwane-wave)" stroke-width="44" stroke-linecap="square" stroke-linejoin="round"/>
+  <rect x="150" y="346" width="212" height="32" rx="1" fill="url(#softwane-rule)"/>
 </svg>

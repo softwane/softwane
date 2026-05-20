@@ -30,7 +30,6 @@
       <feDropShadow dx="0" dy="9" stdDeviation="10" flood-color="rgba(0,0,0,0.2)"/>
     </filter>
   </defs>
-  <rect x="34" y="34" width="444" height="444" rx="126" fill="#FFFFFF"/>
   <rect x="82" y="78" width="348" height="356" rx="98" fill="url(#softwane-window)" filter="url(#window-shadow)"/>
   <rect x="122" y="118" width="268" height="268" rx="64" fill="url(#softwane-panel)" filter="url(#panel-shadow)"/>
   <circle cx="348" cy="156" r="24" fill="url(#softwane-dot)"/>
