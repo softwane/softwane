@@ -3,8 +3,6 @@
 //! Owns a single [`WinMagAPIColorTransformer`] sub-renderer and forwards each
 //! frame's channel values to it.
 
-use std::sync::Arc;
-
 use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
@@ -35,7 +33,7 @@ impl WindowsRendererDispatcher {
     }
 
     // TODO:track color transformer's state, if it doesn't excuted cuz the main thread is stuck, send event
-    pub fn dispatch(&mut self, logic_frame: Arc<LogicFrame>, app: &AppHandle) {
+    pub fn dispatch(&mut self, logic_frame: LogicFrame, app: &AppHandle) {
         let color_temperature = logic_frame[ChannelType::ColorTemp];
         let saturation = logic_frame[ChannelType::Saturation];
         let brightness = logic_frame[ChannelType::Brightness];

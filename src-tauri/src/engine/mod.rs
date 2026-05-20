@@ -118,7 +118,7 @@ impl Engine {
         // Channel calculation
         self.channels.handle_commands(&mut frame_events);
         self.channels.tick(self.timer.state(), &mut frame_events);
-        let logic_frame = Arc::new(self.channels.logic_frame());
+        let logic_frame = self.channels.logic_frame();
 
         // Persistence
         if frame_events.need_persist.timer_state_machine {
