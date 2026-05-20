@@ -7,3 +7,4 @@ gen/
 .claude/
 .superpowers/
 *-plan.html
+.vscode/
