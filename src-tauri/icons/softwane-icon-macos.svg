@@ -1,39 +1,34 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="softwane-window" x1="100" y1="90" x2="414" y2="424" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#312016"/>
-      <stop offset="0.56" stop-color="#18110D"/>
-      <stop offset="1" stop-color="#0C0806"/>
-    </linearGradient>
-    <linearGradient id="softwane-panel" x1="122" y1="116" x2="390" y2="386" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFF8EE"/>
-      <stop offset="0.62" stop-color="#F1E4D1"/>
-      <stop offset="1" stop-color="#E1C8A6"/>
-    </linearGradient>
-    <linearGradient id="softwane-wave" x1="136" y1="220" x2="376" y2="296" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#E4C66F"/>
-      <stop offset="0.48" stop-color="#C89035"/>
-      <stop offset="1" stop-color="#A97022"/>
-    </linearGradient>
-    <linearGradient id="softwane-dot" x1="324" y1="132" x2="374" y2="180" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#E8C777"/>
-      <stop offset="1" stop-color="#B77B24"/>
-    </linearGradient>
-    <linearGradient id="softwane-rule" x1="150" y1="340" x2="362" y2="374" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#B77D2B"/>
-      <stop offset="1" stop-color="#7C4C18"/>
-    </linearGradient>
-    <filter id="window-shadow" x="54" y="58" width="404" height="404" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="rgba(48,30,15,0.24)"/>
-    </filter>
-    <filter id="panel-shadow" x="94" y="100" width="324" height="310" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="9" stdDeviation="10" flood-color="rgba(0,0,0,0.2)"/>
-    </filter>
-  </defs>
-  <rect x="34" y="34" width="444" height="444" rx="126" fill="#FFFFFF"/>
-  <rect x="82" y="78" width="348" height="356" rx="98" fill="url(#softwane-window)" filter="url(#window-shadow)"/>
-  <rect x="122" y="118" width="268" height="268" rx="64" fill="url(#softwane-panel)" filter="url(#panel-shadow)"/>
-  <circle cx="348" cy="156" r="24" fill="url(#softwane-dot)"/>
-  <path d="M138 258C180 214 216 214 256 258C296 302 332 302 374 258" stroke="url(#softwane-wave)" stroke-width="44" stroke-linecap="square" stroke-linejoin="round"/>
-  <rect x="150" y="346" width="212" height="32" rx="1" fill="url(#softwane-rule)"/>
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:url(#SVGID_1_);}
+	
+		.st1{fill:none;stroke:url(#SVGID_00000059285335351008842230000002787949674352583586_);stroke-width:60;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:7.8953;}
+	.st2{fill:url(#SVGID_00000175314080213440214600000003180718417137130635_);}
+</style>
+<g transform="translate(256 256) scale(1.12) translate(-256 -256)">
+	
+		<linearGradient id="SVGID_1_" gradientUnits="userSpaceOnUse" x1="-687.3262" y1="1018.7086" x2="-629.2261" y2="1074.4846" gradientTransform="matrix(1.9738 0 0 1.9738 1689.548 -1896.2433)">
+		<stop  offset="0" style="stop-color:#E8C777"/>
+		<stop  offset="1" style="stop-color:#B77B24"/>
+	</linearGradient>
+	<ellipse class="st0" cx="361.4" cy="141.8" rx="31.2" ry="31.2"/>
+	
+		<linearGradient id="SVGID_00000132801635435332386680000005962302280161568648_" gradientUnits="userSpaceOnUse" x1="-786.1986" y1="1071.3468" x2="-548.7255" y2="1146.5468" gradientTransform="matrix(1.9738 0 0 1.9738 1689.548 -1896.2433)">
+		<stop  offset="0" style="stop-color:#E4C66F"/>
+		<stop  offset="0.48" style="stop-color:#C89035"/>
+		<stop  offset="1" style="stop-color:#A97022"/>
+	</linearGradient>
+	
+		<path style="fill:none;stroke:url(#SVGID_00000132801635435332386680000005962302280161568648_);stroke-width:60;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:7.8953;" d="
+		M124.8,256c46.9-51.5,87.1-51.5,131.8,0s84.8,51.5,131.8,0"/>
+	
+		<linearGradient id="SVGID_00000114775722944806563460000001948832623790443405_" gradientUnits="userSpaceOnUse" x1="-788.3369" y1="1144.8253" x2="-545.3636" y2="1183.7927" gradientTransform="matrix(1.9738 0 0 1.9738 1689.548 -1896.2433)">
+		<stop  offset="0" style="stop-color:#E0BF68"/>
+		<stop  offset="0.715" style="stop-color:#B67D2A"/>
+	</linearGradient>
+	<path style="fill:url(#SVGID_00000114775722944806563460000001948832623790443405_);" d="M135.6,364.2h240.5c0.6,0,1.1,0.5,1.1,1.2
+		v35.2c0,0.6-0.5,1.2-1.1,1.2H135.6c-0.6,0-1.1-0.5-1.1-1.2v-35.2C134.5,364.8,135,364.2,135.6,364.2z"/>
+</g>
 </svg>
