@@ -154,7 +154,7 @@ impl Engine {
                 // TODO: use channel system to get suggested reverse / settling time based on the input max time
                 EngineEvent::State(command) => frame_events.state_commands.push(command),
                 EngineEvent::Channel(command) => frame_events.channel_commands.push(command),
-                EngineEvent::Renderer(renderer_event) => log_renderer_event(&renderer_event),
+                EngineEvent::Renderer(renderer_event) => log_renderer_event(renderer_event),
                 EngineEvent::Progress(command) => {
                     match command {
                         ProgressCommandInner::RegisterChannel { channel, window: _ } => {
@@ -242,7 +242,7 @@ impl std::fmt::Debug for Engine {
 /// - `Startup/RenderFailed`: `error!`
 /// - `StartupSuccessful` / `ShutdownCompleted`: `info!` (low-frequency
 ///   lifecycle markers)
-fn log_renderer_event(event: &RendererEvent) {
+fn log_renderer_event(event: RendererEvent) {
     use RendererEvent::*;
     match event {
         RenderSuccessful { renderer_name } => {
