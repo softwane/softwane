@@ -11,7 +11,7 @@ importers:
       '@tauri-apps/api':
         specifier: 2.10.1
         version: 2.10.1
-      lodash:
+      lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
       vue:
@@ -464,8 +464,8 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
-  lodash@4.18.1:
-    resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
+  lodash-es@4.18.1:
+    resolution: {integrity: sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -857,7 +857,7 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  lodash@4.18.1: {}
+  lodash-es@4.18.1: {}
 
   magic-string@0.30.21:
     dependencies:

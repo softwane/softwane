@@ -1,5 +1,5 @@
 import { computed, ref, toRaw, watch } from "vue";
-import cloneDeep from 'lodash/cloneDeep';
+import cloneDeep from 'lodash-es/cloneDeep';
 
 /**
  * Draft state pattern with explicit Save / Cancel.
