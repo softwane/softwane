@@ -3,8 +3,6 @@
 //! actual rendering.  Useful for testing the engine loop on platforms without
 //! a real sub-renderer (e.g. Linux) and in unit tests.
 
-use std::sync::Arc;
-
 use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
@@ -31,7 +29,7 @@ impl MockRendererDispatcher {
         Self { tx }
     }
 
-    pub fn dispatch(&mut self, _logic_frame: Arc<LogicFrame>, _app: &AppHandle) {
+    pub fn dispatch(&mut self, _logic_frame: LogicFrame, _app: &AppHandle) {
         tracing::debug!("MockRendererDispatcher::dispatch");
     }
 

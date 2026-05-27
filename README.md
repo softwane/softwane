@@ -146,6 +146,7 @@ Implemented:
 - Configurable global shortcuts
 - Launch-at-login and silent-start controls
 - Crash capture and acknowledgement flow
+- Tray/menu bar progress status updates
 - macOS native display adapter using `Core Graphics` transfer tables for warmth/brightness and a ColorSync saturation filter
 - Windows native display adapter using the `Magnification API`
 - Vue 3 control, preview, and settings UI
@@ -156,7 +157,6 @@ Not implemented yet:
 
 - Configurable loop behavior
 - Dedicated structured observability event log with stable event categories
-- Tray progress/title updates beyond menu state
 - Broader automated coverage for platform-specific display adapters
 
 ## Verification Notes
@@ -224,6 +224,5 @@ pnpm tauri:dev
 
 1. Add configurable loop behavior
 2. Add a dedicated structured observability event log with stable event names
-3. Implement tray progress/title updates
-4. Tune the transition parameters with manual visual testing on real hardware
-5. Expand automated coverage for timer, shortcut, config, and platform adapter behavior
+3. Tune the transition parameters with manual visual testing on real hardware
+4. Expand automated coverage for timer, shortcut, config, and platform adapter behavior

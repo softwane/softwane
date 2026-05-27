@@ -3,8 +3,6 @@
 //! Owns a single [`CoreGraphicsGammaRenderer`] sub-renderer and forwards
 //! saturation, colour-temperature, and brightness channel values to it.
 
-use std::sync::Arc;
-
 use tauri::AppHandle;
 use tokio::sync::mpsc::Sender;
 
@@ -39,7 +37,7 @@ impl MacOSRendererDispatcher {
         this
     }
 
-    pub fn dispatch(&mut self, logic_frame: Arc<LogicFrame>, app: &AppHandle) {
+    pub fn dispatch(&mut self, logic_frame: LogicFrame, app: &AppHandle) {
         let color_temperature = logic_frame[ChannelType::ColorTemp];
         let saturation = logic_frame[ChannelType::Saturation];
         let brightness = logic_frame[ChannelType::Brightness];
