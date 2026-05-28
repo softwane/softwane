@@ -52,11 +52,17 @@ function onKeyDown(e) {
 function formatBinding(b) {
   const parts = [];
   if (b.modifiers.includes("control")) parts.push("Ctrl");
-  if (b.modifiers.includes("alt")) parts.push("Alt");
+  if (b.modifiers.includes("alt")) parts.push(altLabel());
   if (b.modifiers.includes("shift")) parts.push("Shift");
   if (b.modifiers.includes("meta")) parts.push(metaLabel());
   parts.push(prettyCode(b.code));
   return parts.join(" + ");
+}
+
+function altLabel() {
+  if (typeof navigator !== "undefined" && /mac/i.test(navigator.platform || ""))
+    return "Option";
+  return "Alt";
 }
 
 function metaLabel() {

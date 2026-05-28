@@ -236,6 +236,15 @@ pub fn run() {
     let log_guard_another_clone = log_guard.clone();
 
     app.run(move |app_handle, event| match event {
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { has_visible_windows, .. } => {
+            if !has_visible_windows {
+                let app_handle = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    window::show_main_window(app_handle).await;
+                });
+            }
+        }
         RunEvent::ExitRequested { api, code,.. } => {
             let Some(exit_code) = code else {
                 // Prevent exit when all windows are desdroyed.
