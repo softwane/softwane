@@ -614,7 +614,7 @@ onMounted(async () => {
                     <small>{{ channelDescription(type) }}</small>
                   </span>
                 </label>
-                <button class="text-button" type="button" :aria-expanded="isChannelExpanded(type)" @click="toggleChannelDetails(type)">
+                <button v-if="channelEnabled[type]" class="text-button" type="button" :aria-expanded="isChannelExpanded(type)" @click="toggleChannelDetails(type)">
                   {{ isChannelExpanded(type) ? "Hide" : "Details" }}
                 </button>
               </div>
