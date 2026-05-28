@@ -1109,6 +1109,107 @@ button {
   accent-color: var(--accent);
 }
 
+.about-panel {
+  display: grid;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+
+.about-project {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.about-mark {
+  width: 34px;
+  height: 34px;
+}
+
+.about-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.about-copy strong {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.15;
+}
+
+.about-copy span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.about-link {
+  white-space: nowrap;
+}
+
+.contributor-list {
+  display: grid;
+  gap: 9px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.contributor-links {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.contributor-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--field-accent);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 600;
+  transition:
+    color var(--motion-button-ms) var(--motion-soft),
+    opacity var(--motion-button-ms) var(--motion-soft);
+  white-space: nowrap;
+}
+
+.contributor-link:hover {
+  color: var(--accent);
+}
+
+.contributor-link:focus-visible {
+  outline: 2px solid var(--field-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.contributor-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+@media (max-width: 504px) {
+  .about-project {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .about-link {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    text-align: center;
+  }
+}
+
 .startup-toggle span {
   display: grid;
   gap: 4px;

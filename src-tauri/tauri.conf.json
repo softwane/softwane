@@ -20,7 +20,17 @@
           "permissions": [
             "core:window:default",
             "core:window:allow-show",
-            "core:window:allow-set-focus"
+            "core:window:allow-set-focus",
+            "opener:allow-open-url",
+            {
+              "identifier": "opener:allow-default-urls",
+              "allow": [
+                { "url": "https://github.com/softwane/softwane" },
+                { "url": "https://github.com/perthonBalans" },
+                { "url": "https://github.com/RoderickQiu" },
+                { "url": "https://github.com/RUSRUSHB" }
+              ]
+            }
           ]
         }
       ]

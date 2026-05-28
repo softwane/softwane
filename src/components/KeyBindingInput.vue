@@ -47,6 +47,8 @@ function onKeyDown(e) {
   if (modifiers.length === 0) return;
 
   emit("update:modelValue", { modifiers, code: e.code });
+  recording.value = false;
+  e.currentTarget?.blur();
 }
 
 function formatBinding(b) {

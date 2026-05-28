@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import softwaneMark from "./assets/softwane-mark.svg";
 import { useAppearance } from "./composables/useAppearance";
@@ -44,6 +45,12 @@ const workMinutes = ref(50);
 const expandedChannelSettings = ref({});
 const isShortcutSectionOpen = ref(false);
 const channelCompatibilityNotice = ref("");
+const projectUrl = "https://github.com/softwane/softwane";
+const contributors = [
+  { username: "perthonBalans", name: "Anchor4P" },
+  { username: "RoderickQiu", name: "Tianrun Qiu" },
+  { username: "RUSRUSHB", name: "Eason Z" },
+];
 let channelCompatibilityNoticeTimer = 0;
 
 const themeModeOptions = [
@@ -309,6 +316,23 @@ function onCloseSettings() {
   isSettingsOpen.value = false; 
 }
 
+async function openExternalUrl(url) {
+  try {
+    await openUrl(url);
+  } catch (error) {
+    console.error("Failed to open external URL", error);
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+function openProjectPage() {
+  return openExternalUrl(projectUrl);
+}
+
+function openContributorProfile(username) {
+  return openExternalUrl(`https://github.com/${username}`);
+}
+
 // ── Preset durations (Save / Cancel) ──────────────────────────────────
 
 const presetDraft = useDraft(presetDurations, async (d) => {
@@ -348,7 +372,7 @@ function onPresetCancel() {
   presetDraft.cancel();
 }
 
-// ── Shortcut bindings (Save / Cancel) ─────────────────────────────────
+// ── Shortcut bindings (autosave / Cancel) ─────────────────────────────
 
 const shortcutLabels = {
   start_preset1: "Start preset 1",
@@ -361,21 +385,39 @@ const shortcutLabels = {
   toggle_main_window: "Toggle window",
 };
 
-const shortcutDraft = useDraft(shortcutBindings, async (b) => {
-  await saveShortcutBindings(b);
-});
+const shortcutDraft = useDraft(shortcutBindings, saveShortcutBindings);
 const shortcutSaveError = ref("");
 const configuredShortcutCount = computed(() => {
   if (!shortcutDraft.draft.value) return 0;
   return SHORTCUT_ACTIONS.filter((action) => shortcutDraft.draft.value[action]).length;
 });
 
-function setShortcutBinding(action, binding) {
+let shortcutSaveToken = 0;
+let shortcutSaveQueue = Promise.resolve();
+
+async function setShortcutBinding(action, binding) {
   if (!shortcutDraft.draft.value) return;
-  shortcutDraft.draft.value = {
+  const next = {
     ...shortcutDraft.draft.value,
     [action]: binding,
   };
+  shortcutDraft.draft.value = next;
+  const token = ++shortcutSaveToken;
+
+  if (findShortcutConflicts(next).size > 0) {
+    shortcutSaveError.value = "Resolve conflicts before saving.";
+    return;
+  }
+
+  shortcutSaveError.value = "";
+  try {
+    shortcutSaveQueue = shortcutSaveQueue
+      .catch(() => {})
+      .then(() => saveShortcutBindings(next));
+    await shortcutSaveQueue;
+  } catch (e) {
+    if (token === shortcutSaveToken) shortcutSaveError.value = String(e);
+  }
 }
 
 /** Stringify a binding's (sorted modifiers, code) for collision matching. */
@@ -389,12 +431,12 @@ function bindingFingerprint(b) {
  * Collisions in the current draft: returns a Set of action ids that
  * share their fingerprint with at least one other action.
  */
-const shortcutConflicts = computed(() => {
+function findShortcutConflicts(bindings) {
   const conflicts = new Set();
-  if (!shortcutDraft.draft.value) return conflicts;
+  if (!bindings) return conflicts;
   const fpToAction = new Map();
   for (const action of SHORTCUT_ACTIONS) {
-    const b = shortcutDraft.draft.value[action];
+    const b = bindings[action];
     const fp = bindingFingerprint(b);
     if (!fp) continue;
     if (fpToAction.has(fp)) {
@@ -405,7 +447,9 @@ const shortcutConflicts = computed(() => {
     }
   }
   return conflicts;
-});
+}
+
+const shortcutConflicts = computed(() => findShortcutConflicts(shortcutDraft.draft.value));
 
 const shortcutHasConflict = computed(() => shortcutConflicts.value.size > 0);
 
@@ -415,19 +459,6 @@ const conflictBannerText = computed(() => {
   const labels = ids.map((id) => shortcutLabels[id] ?? id);
   return `Conflict: ${labels.join(", ")} share the same combination.`;
 });
-
-async function onShortcutSave() {
-  shortcutSaveError.value = "";
-  if (shortcutHasConflict.value) {
-    shortcutSaveError.value = "Resolve conflicts before saving.";
-    return;
-  }
-  try {
-    await shortcutDraft.commit();
-  } catch (e) {
-    shortcutSaveError.value = String(e);
-  }
-}
 
 function onShortcutCancel() {
   shortcutSaveError.value = "";
@@ -663,7 +694,6 @@ onMounted(async () => {
                 {{ isShortcutSectionOpen ? "Hide" : "Show" }}
               </button>
               <button class="ghost-button" type="button" :disabled="!shortcutDraft.dirty.value" @click="onShortcutCancel">Cancel</button>
-              <button class="ghost-button ghost-button-primary" type="button" :disabled="!shortcutDraft.dirty.value || shortcutHasConflict" @click="onShortcutSave">Save</button>
             </div>
           </div>
           <p v-if="shortcutHasConflict" class="settings-error">{{ conflictBannerText }}</p>
@@ -723,6 +753,47 @@ onMounted(async () => {
                   <small>Keep the main window hidden when Softwane starts.</small>
                 </span>
               </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="about-settings-title">
+          <div class="settings-section-header">
+            <div>
+              <p class="settings-kicker">About</p>
+              <h2 id="about-settings-title" class="settings-section-title">Softwane</h2>
+            </div>
+          </div>
+
+          <div class="about-panel">
+            <div class="about-project">
+              <img class="about-mark" :src="softwaneMark" alt="" aria-hidden="true" />
+              <div class="about-copy">
+                <strong>Ambient progressive rest reminder</strong>
+                <span>Follow development, report issues, and inspect the source on GitHub.</span>
+              </div>
+              <button class="ghost-button ghost-button-primary about-link" type="button" @click="openProjectPage">
+                GitHub
+              </button>
+            </div>
+
+            <div class="contributor-list" aria-label="Active contributors">
+              <div class="settings-group-header">
+                <span class="settings-group-title">Contributors</span>
+                <span class="settings-group-meta">Active</span>
+              </div>
+              <div class="contributor-links">
+                <button
+                  v-for="contributor in contributors"
+                  :key="contributor.username"
+                  class="contributor-link"
+                  type="button"
+                  @click="openContributorProfile(contributor.username)"
+                >
+                  @{{ contributor.username }}
+                </button>
+                <span class="contributor-note">and more</span>
+              </div>
             </div>
           </div>
         </section>

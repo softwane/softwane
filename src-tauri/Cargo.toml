@@ -33,6 +33,7 @@ spin_sleep = "1"
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-opener = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-color-sync = "0.3"

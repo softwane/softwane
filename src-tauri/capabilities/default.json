@@ -5,6 +5,16 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "core:window:allow-set-theme"
+    "core:window:allow-set-theme",
+    "opener:allow-open-url",
+    {
+      "identifier": "opener:allow-default-urls",
+      "allow": [
+        { "url": "https://github.com/softwane/softwane" },
+        { "url": "https://github.com/perthonBalans" },
+        { "url": "https://github.com/RoderickQiu" },
+        { "url": "https://github.com/RUSRUSHB" }
+      ]
+    }
   ]
 }
