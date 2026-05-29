@@ -82,6 +82,7 @@ pub fn get_app_locale(app_handle: AppHandle) -> Result<String, CommandError> {
     Ok(normalize_locale_preference(&locale).unwrap_or_else(|| APP_LOCALE_SYSTEM.to_string()))
 }
 
+// TODO: Merge get_app_locale and get_resolved_app_locale
 #[tauri::command]
 pub fn get_resolved_app_locale(app_handle: AppHandle) -> String {
     resolve_app_locale(&app_handle).as_str().to_string()
