@@ -1,0 +1,201 @@
+{
+  "app": {
+    "name": "Softwane",
+    "tagline": "Ambient progressive rest reminder",
+    "settingsTitle": "Tune Softwane",
+    "settingsButton": "Tune"
+  },
+  "language": {
+    "label": "Language",
+    "system": "Use system language",
+    "en": "English",
+    "zh-CN": "简体中文"
+  },
+  "phase": {
+    "idle": "Idle",
+    "preview": "Preview",
+    "progress": "Progress",
+    "settling": "Settling",
+    "rest": "Rest",
+    "reverse": "Reverse",
+    "settlingSecondary": "Settling into rest",
+    "reverseSecondary": "Recovering to neutral",
+    "restSecondary": "Press hotkey to return"
+  },
+  "actions": {
+    "takeBreakNow": "Take a break now",
+    "stop": "Stop",
+    "startNewSession": "Start a new session",
+    "cancel": "Cancel",
+    "save": "Save",
+    "show": "Show",
+    "hide": "Hide",
+    "details": "Details",
+    "openPreview": "Open preview",
+    "closePreview": "Close preview",
+    "github": "GitHub"
+  },
+  "startLayer": {
+    "ariaLabel": "Start timer",
+    "kicker": "Start timer",
+    "title": "Choose a session",
+    "closeAria": "Close start timer",
+    "quickStartAria": "Quick start durations",
+    "customTime": "Custom time",
+    "startMinutes": "Start {minutes} min"
+  },
+  "settings": {
+    "ariaLabel": "Settings",
+    "closeAria": "Close settings",
+    "summaryAria": "Current settings summary",
+    "cue": "Cue",
+    "presets": "Presets",
+    "app": "App",
+    "changesApplyImmediately": "Changes apply immediately",
+    "configuredCount": "{count} configured"
+  },
+  "cue": {
+    "kicker": "Cue",
+    "title": "Visual reminder",
+    "previewTitle": "Preview {percent}",
+    "previewTitleIdle": "Preview the cue",
+    "previewDescription": "Inspect the display effect without starting a session.",
+    "previewIntensityAria": "Preview intensity",
+    "noActiveCue": "No visual cue is active",
+    "activeSummary": "{active} active",
+    "compatibilityNotice": "{names} turned off because it cannot run with {enabled} on macOS.",
+    "channelSummaryAria": "Channel summary",
+    "channel": {
+      "saturation": {
+        "label": "Saturation",
+        "description": "Softens color as the session approaches its end.",
+        "targetSummary": "{value} final color",
+        "targetControl": "Final color {value}"
+      },
+      "color_temp": {
+        "label": "Warmth",
+        "description": "Warms the display into a sunset-like tone.",
+        "targetSummary": "{value} K final warmth",
+        "targetControl": "Final warmth {value} K"
+      },
+      "brightness": {
+        "label": "Brightness",
+        "description": "Dims the display for a lower-presence cue.",
+        "targetSummary": "{value} final brightness",
+        "targetControl": "Final brightness {value}"
+      }
+    },
+    "timingSummary": "starts at {value}",
+    "beginRatioControl": "Starts at {value}",
+    "ramp": {
+      "slow": "slow ramp",
+      "balanced": "balanced ramp",
+      "sharp": "sharp ramp",
+      "shapeControl": "Ramp shape {value}"
+    }
+  },
+  "session": {
+    "kicker": "Session",
+    "title": "Quick start durations",
+    "preset": "Preset {index}",
+    "minutesShort": "min"
+  },
+  "shortcuts": {
+    "kicker": "Controls",
+    "title": "Shortcuts",
+    "sectionNote": "Keyboard controls are configured. Open this section only when you need to change them.",
+    "placeholder": "Press a key combo...",
+    "recording": "Recording... press a key combo",
+    "conflictBanner": "Conflict: {labels} share the same combination.",
+    "resolveConflict": "Resolve conflicts before saving.",
+    "action": {
+      "start_preset1": "Start preset 1",
+      "start_preset2": "Start preset 2",
+      "start_preset3": "Start preset 3",
+      "take_break_now": "Take a break now",
+      "stop_session": "Stop session",
+      "toggle_preview": "Toggle preview",
+      "force_reset": "Force reset",
+      "toggle_main_window": "Toggle window"
+    },
+    "modifier": {
+      "ctrl": "Ctrl",
+      "alt": "Alt",
+      "option": "Option",
+      "shift": "Shift",
+      "cmd": "Cmd",
+      "win": "Win",
+      "space": "Space",
+      "esc": "Esc",
+      "num": "Num {key}"
+    }
+  },
+  "appearance": {
+    "kicker": "App",
+    "title": "Appearance and startup",
+    "theme": "Theme",
+    "themeModeAria": "Theme mode",
+    "themeSummaryAuto": "Auto, {current} now",
+    "themeSummaryFixed": "{current} fixed",
+    "themeCurrentDark": "dark",
+    "themeCurrentLight": "light",
+    "themeLabelDark": "Dark",
+    "themeLabelLight": "Light",
+    "themeOption": {
+      "auto": {
+        "label": "Auto",
+        "description": "Follow the system appearance and switch live."
+      },
+      "dark": {
+        "label": "Dark",
+        "description": "Always keep the app in dark mode."
+      },
+      "light": {
+        "label": "Light",
+        "description": "Always keep the app in light mode."
+      }
+    },
+    "startup": "Startup",
+    "launchAtLogin": "Launch at login",
+    "launchAtLoginDescription": "Start Softwane when the system signs in.",
+    "silentStart": "Silent start",
+    "silentStartDescription": "Keep the main window hidden when Softwane starts."
+  },
+  "about": {
+    "kicker": "About",
+    "title": "Softwane",
+    "description": "Follow development, report issues, and inspect the source on GitHub.",
+    "contributors": "Contributors",
+    "active": "Active",
+    "andMore": "and more",
+    "contributorsAria": "Active contributors"
+  },
+  "errors": {
+    "updateChannel": "Could not update this channel",
+    "updateSettlingDuration": "Could not update settling duration",
+    "updateReverseDuration": "Could not update reverse duration",
+    "expectedThreeDurations": "expected exactly 3 durations",
+    "updateChannelTiming": "Could not update channel timing",
+    "updateChannelTarget": "Could not update channel target",
+    "updateChannelCurve": "Could not update channel curve",
+    "updateAutostart": "Could not update launch at login",
+    "updateSilentStart": "Could not update silent start"
+  },
+  "tray": {
+    "crashIndicator": "Err",
+    "openWindow": "Open window",
+    "startSession": "Start a {minutes} min session",
+    "takeBreakNow": "Take a break now",
+    "stop": "Stop",
+    "forceReset": "Force reset",
+    "quit": "Quit",
+    "status": {
+      "idle": "Idle",
+      "preview": "Preview",
+      "workLeft": "Work left: {time}",
+      "settling": "Settling: {time}",
+      "rest": "Rest",
+      "resuming": "Resuming: {time}"
+    }
+  }
+}

@@ -1,0 +1,201 @@
+{
+  "app": {
+    "name": "Softwane",
+    "tagline": "渐进式环境休息提醒",
+    "settingsTitle": "调整 Softwane",
+    "settingsButton": "调整"
+  },
+  "language": {
+    "label": "语言",
+    "system": "跟随系统语言",
+    "en": "English",
+    "zh-CN": "简体中文"
+  },
+  "phase": {
+    "idle": "空闲",
+    "preview": "预览",
+    "progress": "进行中",
+    "settling": "缓入休息",
+    "rest": "休息中",
+    "reverse": "恢复中",
+    "settlingSecondary": "正在过渡到休息状态",
+    "reverseSecondary": "正在恢复到中性显示",
+    "restSecondary": "按快捷键即可返回"
+  },
+  "actions": {
+    "takeBreakNow": "立即休息",
+    "stop": "停止",
+    "startNewSession": "开始新一轮",
+    "cancel": "取消",
+    "save": "保存",
+    "show": "展开",
+    "hide": "收起",
+    "details": "详情",
+    "openPreview": "打开预览",
+    "closePreview": "关闭预览",
+    "github": "GitHub"
+  },
+  "startLayer": {
+    "ariaLabel": "开始计时",
+    "kicker": "开始计时",
+    "title": "选择一轮时长",
+    "closeAria": "关闭开始计时",
+    "quickStartAria": "快速开始时长",
+    "customTime": "自定义时间",
+    "startMinutes": "开始 {minutes} 分钟"
+  },
+  "settings": {
+    "ariaLabel": "设置",
+    "closeAria": "关闭设置",
+    "summaryAria": "当前设置摘要",
+    "cue": "提示",
+    "presets": "预设",
+    "app": "应用",
+    "changesApplyImmediately": "修改会立即生效",
+    "configuredCount": "已配置 {count} 个"
+  },
+  "cue": {
+    "kicker": "提示",
+    "title": "视觉提醒",
+    "previewTitle": "预览 {percent}",
+    "previewTitleIdle": "预览视觉提示",
+    "previewDescription": "无需开始会话，也可以直接检查屏幕效果。",
+    "previewIntensityAria": "预览强度",
+    "noActiveCue": "当前没有启用视觉提示",
+    "activeSummary": "{active} 已启用",
+    "compatibilityNotice": "{names} 已关闭，因为它无法与 macOS 上的 {enabled} 同时运行。",
+    "channelSummaryAria": "通道摘要",
+    "channel": {
+      "saturation": {
+        "label": "饱和度",
+        "description": "在会话接近结束时逐渐减弱色彩。",
+        "targetSummary": "最终颜色 {value}",
+        "targetControl": "最终颜色 {value}"
+      },
+      "color_temp": {
+        "label": "暖色温",
+        "description": "让屏幕逐渐转向夕阳般的暖色调。",
+        "targetSummary": "最终暖色温 {value} K",
+        "targetControl": "最终暖色温 {value} K"
+      },
+      "brightness": {
+        "label": "亮度",
+        "description": "降低屏幕亮度，形成更柔和的存在感提示。",
+        "targetSummary": "最终亮度 {value}",
+        "targetControl": "最终亮度 {value}"
+      }
+    },
+    "timingSummary": "从 {value} 开始",
+    "beginRatioControl": "从 {value} 开始",
+    "ramp": {
+      "slow": "缓慢变化",
+      "balanced": "均衡变化",
+      "sharp": "快速变化",
+      "shapeControl": "变化曲线 {value}"
+    }
+  },
+  "session": {
+    "kicker": "会话",
+    "title": "快速开始时长",
+    "preset": "预设 {index}",
+    "minutesShort": "分钟"
+  },
+  "shortcuts": {
+    "kicker": "控制",
+    "title": "快捷键",
+    "sectionNote": "快捷键已经配置好。只有在你需要修改时才需要展开这一栏。",
+    "placeholder": "按下组合键...",
+    "recording": "录制中... 请按下组合键",
+    "conflictBanner": "冲突：{labels} 使用了相同的组合键。",
+    "resolveConflict": "请先解决冲突再保存。",
+    "action": {
+      "start_preset1": "启动预设 1",
+      "start_preset2": "启动预设 2",
+      "start_preset3": "启动预设 3",
+      "take_break_now": "立即休息",
+      "stop_session": "停止会话",
+      "toggle_preview": "切换预览",
+      "force_reset": "强制重置",
+      "toggle_main_window": "切换窗口"
+    },
+    "modifier": {
+      "ctrl": "Ctrl",
+      "alt": "Alt",
+      "option": "Option",
+      "shift": "Shift",
+      "cmd": "Cmd",
+      "win": "Win",
+      "space": "空格",
+      "esc": "Esc",
+      "num": "数字键盘 {key}"
+    }
+  },
+  "appearance": {
+    "kicker": "应用",
+    "title": "外观与启动",
+    "theme": "主题",
+    "themeModeAria": "主题模式",
+    "themeSummaryAuto": "自动，当前为{current}",
+    "themeSummaryFixed": "固定为{current}",
+    "themeCurrentDark": "深色",
+    "themeCurrentLight": "浅色",
+    "themeLabelDark": "深色",
+    "themeLabelLight": "浅色",
+    "themeOption": {
+      "auto": {
+        "label": "自动",
+        "description": "跟随系统外观，并实时切换。"
+      },
+      "dark": {
+        "label": "深色",
+        "description": "始终使用深色模式。"
+      },
+      "light": {
+        "label": "浅色",
+        "description": "始终使用浅色模式。"
+      }
+    },
+    "startup": "启动",
+    "launchAtLogin": "登录时启动",
+    "launchAtLoginDescription": "系统登录后自动启动 Softwane。",
+    "silentStart": "静默启动",
+    "silentStartDescription": "Softwane 启动时保持主窗口隐藏。"
+  },
+  "about": {
+    "kicker": "关于",
+    "title": "Softwane",
+    "description": "在 GitHub 上关注开发进展、反馈问题并查看源码。",
+    "contributors": "贡献者",
+    "active": "活跃",
+    "andMore": "以及更多",
+    "contributorsAria": "活跃贡献者"
+  },
+  "errors": {
+    "updateChannel": "无法更新该通道",
+    "updateSettlingDuration": "无法更新缓入休息时长",
+    "updateReverseDuration": "无法更新恢复时长",
+    "expectedThreeDurations": "必须精确提供 3 个时长",
+    "updateChannelTiming": "无法更新通道时机",
+    "updateChannelTarget": "无法更新通道目标值",
+    "updateChannelCurve": "无法更新通道曲线",
+    "updateAutostart": "无法更新登录启动设置",
+    "updateSilentStart": "无法更新静默启动设置"
+  },
+  "tray": {
+    "crashIndicator": "错",
+    "openWindow": "打开窗口",
+    "startSession": "开始 {minutes} 分钟会话",
+    "takeBreakNow": "立即休息",
+    "stop": "停止",
+    "forceReset": "强制重置",
+    "quit": "退出",
+    "status": {
+      "idle": "空闲",
+      "preview": "预览",
+      "workLeft": "剩余工作时间：{time}",
+      "settling": "缓入休息：{time}",
+      "rest": "休息中",
+      "resuming": "恢复中：{time}"
+    }
+  }
+}

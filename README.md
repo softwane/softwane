@@ -12,6 +12,7 @@ This repository currently contains:
 
 - A desktop app built with `Tauri + Rust + Native OS APIs`
 - A Vue 3 control and settings UI for sessions, preview, visual channels, shortcuts, and startup behavior
+- End-to-end app localization for `English` and `Simplified Chinese`, including the Vue UI and the native tray/menu text
 - A product and technical specification derived from the original concept document
 
 ## Product Philosophy
@@ -145,11 +146,14 @@ Implemented:
 - Configurable visual channels for saturation, warmth, brightness, cue timing, final intensity, and ramp shape
 - Configurable global shortcuts
 - Launch-at-login and silent-start controls
+- App language setting with system-follow mode and persisted user override
 - Crash capture and acknowledgement flow
 - Tray/menu bar progress status updates
 - macOS native display adapter using `Core Graphics` transfer tables for warmth/brightness and a ColorSync saturation filter
 - Windows native display adapter using the `Magnification API`
 - Vue 3 control, preview, and settings UI
+- Vue UI localization through `vue-i18n`
+- Native tray/menu localization through a Rust-side translation layer backed by `tauri-plugin-os` locale detection and stored app preference
 - Local structured tracing logs for runtime diagnostics
 - Product and technical spec
 
@@ -166,6 +170,57 @@ Local validation completed:
 - `cargo test`
 - `pnpm build`
 - `pnpm tauri build --debug`
+
+## Internationalization
+
+The app now ships with two UI languages:
+
+- `English`
+- `Simplified Chinese` (`zh-CN`)
+
+Coverage includes:
+
+- The Vue control/settings UI under `src/`
+- Shortcut recorder labels and placeholder text
+- Native tray/menu labels and live tray status text under `src-tauri/`
+
+### Locale Resolution
+
+At startup the app resolves language in this order:
+
+1. Stored app preference in `config.json`
+2. System locale from `@tauri-apps/plugin-os` / `tauri-plugin-os`
+3. Fallback to `en`
+
+The Settings screen includes a language selector with:
+
+- `Use system language`
+- `English`
+- `简体中文`
+
+When the language changes, the new preference is persisted and the tray/menu text is refreshed immediately.
+
+### Key Files
+
+- `src/i18n/index.js`: Vue i18n bootstrap and locale detection
+- `src/i18n/locales/en.json`: English strings
+- `src/i18n/locales/zh-CN.json`: Simplified Chinese strings
+- `src/i18n/runtime.js`: lightweight translation bridge for non-component frontend state
+- `src-tauri/src/i18n.rs`: Rust-side locale preference, translation helpers, and tray-facing localization
+
+### Adding Or Editing Strings
+
+Frontend:
+
+- Add or edit keys in `src/i18n/locales/en.json`
+- Mirror them in `src/i18n/locales/zh-CN.json`
+- Reference them with `t("...")` inside Vue components
+
+Rust tray/menu text:
+
+- Update the keys in `src-tauri/src/i18n.rs`
+- Keep the English and Simplified Chinese branches in sync
+- Run `cargo test` after changes because tray status localization has unit coverage
 
 ## Observability Logs
 

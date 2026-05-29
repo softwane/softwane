@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 
 /**
  * VS Code-style key recorder.
@@ -22,9 +23,10 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue"]);
 
 const recording = ref(false);
+const { t } = useI18n();
 
 const displayText = computed(() => {
-  if (recording.value) return "Recording... press a key combo";
+  if (recording.value) return t("shortcuts.recording");
   if (!props.modelValue) return "";
   return formatBinding(props.modelValue);
 });
@@ -53,9 +55,9 @@ function onKeyDown(e) {
 
 function formatBinding(b) {
   const parts = [];
-  if (b.modifiers.includes("control")) parts.push("Ctrl");
+  if (b.modifiers.includes("control")) parts.push(t("shortcuts.modifier.ctrl"));
   if (b.modifiers.includes("alt")) parts.push(altLabel());
-  if (b.modifiers.includes("shift")) parts.push("Shift");
+  if (b.modifiers.includes("shift")) parts.push(t("shortcuts.modifier.shift"));
   if (b.modifiers.includes("meta")) parts.push(metaLabel());
   parts.push(prettyCode(b.code));
   return parts.join(" + ");
@@ -63,22 +65,22 @@ function formatBinding(b) {
 
 function altLabel() {
   if (typeof navigator !== "undefined" && /mac/i.test(navigator.platform || ""))
-    return "Option";
-  return "Alt";
+    return t("shortcuts.modifier.option");
+  return t("shortcuts.modifier.alt");
 }
 
 function metaLabel() {
   if (typeof navigator !== "undefined" && /mac/i.test(navigator.platform || ""))
-    return "Cmd";
-  return "Win";
+    return t("shortcuts.modifier.cmd");
+  return t("shortcuts.modifier.win");
 }
 
 function prettyCode(code) {
   if (code.startsWith("Digit")) return code.slice(5);
   if (code.startsWith("Key")) return code.slice(3);
-  if (code.startsWith("Numpad")) return `Num ${code.slice(6)}`;
-  if (code === "Space") return "Space";
-  if (code === "Escape") return "Esc";
+  if (code.startsWith("Numpad")) return t("shortcuts.modifier.num", { key: code.slice(6) });
+  if (code === "Space") return t("shortcuts.modifier.space");
+  if (code === "Escape") return t("shortcuts.modifier.esc");
   return code;
 }
 </script>

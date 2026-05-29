@@ -114,3 +114,10 @@ export const getSilentStart = () => invoke<boolean>("get_silent_start");
 
 export const setSilentStart = (enabled: boolean) =>
   invoke<void>("set_silent_start", { enabled });
+
+export const getAppLocale = () => invoke<string>("get_app_locale");
+
+export const getResolvedAppLocale = () => invoke<string>("get_resolved_app_locale");
+
+export const setAppLocale = (locale: string) =>
+  invoke<void>("set_app_locale", { locale });

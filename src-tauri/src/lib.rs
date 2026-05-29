@@ -8,6 +8,7 @@ mod commands;
 mod shortcuts;
 mod tray;
 mod window;
+mod i18n;
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -34,6 +35,7 @@ pub fn run() {
     
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
@@ -84,6 +86,10 @@ pub fn run() {
             defaults.insert(
                 STORE_KEY_SILENT_START.into(),
                 serde_json::json!(false),
+            );
+            defaults.insert(
+                i18n::STORE_KEY_APP_LOCALE.into(),
+                serde_json::json!(i18n::APP_LOCALE_SYSTEM),
             );
             let store = StoreBuilder::new(app.handle(), "config.json")
                 .auto_save(Duration::from_secs(1))
@@ -230,6 +236,9 @@ pub fn run() {
             shortcuts::update_shortcut_bindings,
             window::get_silent_start,
             window::set_silent_start,
+            i18n::get_app_locale,
+            i18n::get_resolved_app_locale,
+            i18n::set_app_locale,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build softwane");

@@ -12,6 +12,7 @@ use crate::{
     timer_state_machine::{TimerState, commands::StateCommand},
     state::SharedTimerState,
     commands::get_preset_session_durations,
+    i18n::{resolve_app_locale, tr, tr_format, AppLocale},
     window,
 };
 
@@ -82,31 +83,31 @@ fn build_tray(app: &AppHandle, state: TimerState, durations: [u64; 3]) -> tauri:
 }
 
 fn build_menu(app: &AppHandle, state: TimerState, durations: [u64; 3]) -> Result<Menu<Wry>, tauri::Error> {
-    let phase_label = state.label();
-    let is_idle = phase_label == "Idle";
-    let is_progress = phase_label == "Progress";
-    let is_settling = phase_label == "Settling";
-    let is_rest = phase_label == "Rest";
+    let is_idle = matches!(state, TimerState::Idle);
+    let is_progress = matches!(state, TimerState::Progress { .. });
+    let is_settling = matches!(state, TimerState::Settling { .. });
+    let is_rest = matches!(state, TimerState::Rest);
+    let locale = resolve_app_locale(app);
 
     let seperator = PredefinedMenuItem::separator(app)?;
 
-    let status = MenuItem::with_id(app, "status", tray_status_label(state), false, None::<&str>)?;
+    let status = MenuItem::with_id(app, "status", tray_status_label(locale, state), false, None::<&str>)?;
     remember_tray_status_item(&status);
-    let open_win = MenuItem::with_id(app, "open", "Open window", true, None::<&str>)?;
+    let open_win = MenuItem::with_id(app, "open", tr(locale, "tray.openWindow"), true, None::<&str>)?;
 
-    let start_preset1_label = format!("start a {} min session", durations[0] / 60_000);
-    let start_preset2_label = format!("start a {} min session", durations[1] / 60_000);
-    let start_preset3_label = format!("start a {} min session", durations[2] / 60_000);
+    let start_preset1_label = tr_format(locale, "tray.startSession", &[("{minutes}", (durations[0] / 60_000).to_string())]);
+    let start_preset2_label = tr_format(locale, "tray.startSession", &[("{minutes}", (durations[1] / 60_000).to_string())]);
+    let start_preset3_label = tr_format(locale, "tray.startSession", &[("{minutes}", (durations[2] / 60_000).to_string())]);
 
     let start_preset1 = MenuItem::with_id(app, "start_preset1", start_preset1_label, is_idle, None::<&str>)?;
     let start_preset2 = MenuItem::with_id(app, "start_preset2", start_preset2_label, is_idle, None::<&str>)?;
     let start_preset3 = MenuItem::with_id(app, "start_preset3", start_preset3_label, is_idle, None::<&str>)?;
-    let take_break = MenuItem::with_id(app, "take_break_now", "Take a break now", is_progress, None::<&str>)?;
-    let stop = MenuItem::with_id(app, "stop", "Stop", is_progress || is_settling || is_rest, None::<&str>)?;
+    let take_break = MenuItem::with_id(app, "take_break_now", tr(locale, "tray.takeBreakNow"), is_progress, None::<&str>)?;
+    let stop = MenuItem::with_id(app, "stop", tr(locale, "tray.stop"), is_progress || is_settling || is_rest, None::<&str>)?;
     
-    let reset = MenuItem::with_id(app, "force_reset", "Force reset", true, None::<&str>)?;
+    let reset = MenuItem::with_id(app, "force_reset", tr(locale, "tray.forceReset"), true, None::<&str>)?;
     
-    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", tr(locale, "tray.quit"), true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
@@ -131,12 +132,13 @@ fn build_menu(app: &AppHandle, state: TimerState, durations: [u64; 3]) -> Result
 
 pub fn notify_crash(app: &AppHandle) {
     if let Some(tray) = app.tray_by_id("main") {
-        let _ = tray.set_title(Some("Err"));
+        let locale = resolve_app_locale(app);
+        let _ = tray.set_title(Some(tr(locale, "tray.crashIndicator")));
     }
 }
 
 pub fn update_tray_progress(app: &AppHandle, progress: ProgressPayload) -> tauri::Result<()> {
-    let status = tray_status_label(progress.timer_state);
+    let status = tray_status_label(resolve_app_locale(app), progress.timer_state);
 
     #[cfg(windows)]
     {
@@ -217,20 +219,26 @@ fn mark_tray_status_changed(status: &str) -> bool {
     true
 }
 
-fn tray_status_label(state: TimerState) -> String {
+fn tray_status_label(locale: AppLocale, state: TimerState) -> String {
     match state {
-        TimerState::Idle => "Idle".to_string(),
-        TimerState::Preview { .. } => "Preview".to_string(),
-        TimerState::Progress { elapsed_ms, target_duration_ms } => {
-            format!("Work left: {}", format_remaining_ms(target_duration_ms.saturating_sub(elapsed_ms)))
-        },
-        TimerState::Settling { elapsed_ms, target_duration_ms } => {
-            format!("Settling: {}", format_remaining_ms(target_duration_ms.saturating_sub(elapsed_ms)))
-        },
-        TimerState::Rest => "Rest".to_string(),
-        TimerState::Reverse { elapsed_ms, target_duration_ms } => {
-            format!("Resuming: {}", format_remaining_ms(target_duration_ms.saturating_sub(elapsed_ms)))
-        },
+        TimerState::Idle => tr(locale, "tray.status.idle").to_string(),
+        TimerState::Preview { .. } => tr(locale, "tray.status.preview").to_string(),
+        TimerState::Progress { elapsed_ms, target_duration_ms } => tr_format(
+            locale,
+            "tray.status.workLeft",
+            &[("{time}", format_remaining_ms(target_duration_ms.saturating_sub(elapsed_ms)))],
+        ),
+        TimerState::Settling { elapsed_ms, target_duration_ms } => tr_format(
+            locale,
+            "tray.status.settling",
+            &[("{time}", format_remaining_ms(target_duration_ms.saturating_sub(elapsed_ms)))],
+        ),
+        TimerState::Rest => tr(locale, "tray.status.rest").to_string(),
+        TimerState::Reverse { elapsed_ms, target_duration_ms } => tr_format(
+            locale,
+            "tray.status.resuming",
+            &[("{time}", format_remaining_ms(target_duration_ms.saturating_sub(elapsed_ms)))],
+        ),
     }
 }
 
@@ -252,7 +260,7 @@ mod tests {
             target_duration_ms: 25 * 60_000,
         };
 
-        assert_eq!(tray_status_label(state), "Work left: 23:59");
+        assert_eq!(tray_status_label(AppLocale::En, state), "Work left: 23:59");
     }
 
     #[test]
@@ -262,12 +270,22 @@ mod tests {
             target_duration_ms: 5_000,
         };
 
-        assert_eq!(tray_status_label(state), "Settling: 00:00");
+        assert_eq!(tray_status_label(AppLocale::En, state), "Settling: 00:00");
     }
 
     #[test]
     fn rounds_partial_seconds_up_for_display() {
         assert_eq!(format_remaining_ms(1), "00:01");
         assert_eq!(format_remaining_ms(60_001), "01:01");
+    }
+
+    #[test]
+    fn localizes_tray_status_in_chinese() {
+        let state = TimerState::Progress {
+            elapsed_ms: 61_200,
+            target_duration_ms: 25 * 60_000,
+        };
+
+        assert_eq!(tray_status_label(AppLocale::ZhCn, state), "剩余工作时间：23:59");
     }
 }

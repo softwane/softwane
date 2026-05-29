@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import * as api from "../api/commands";
+import { tr } from "../i18n/runtime";
 
 // ── Reactive state ────────────────────────────────────────────────────
 
@@ -251,7 +252,7 @@ export function toggleChannel(channelType, switchOn) {
       const entry = config?.channel_configs?.find(([type]) => type === channelType);
       return entry ? entry[1].switch_on === switchOn : false;
     },
-    errorMessage: "Could not update this channel",
+    errorMessage: tr("errors.updateChannel"),
   });
 }
 
@@ -268,7 +269,7 @@ export function updateSettlingDuration(durationMs) {
     commit: () => api.updateSettlingDuration(durationMs),
     reconcile: loadConfigAfterEngineTick,
     verify: (config) => config?.timer_config?.settling_duration_ms === durationMs,
-    errorMessage: "Could not update settling duration",
+    errorMessage: tr("errors.updateSettlingDuration"),
   });
 }
 
@@ -285,7 +286,7 @@ export function updateReverseDuration(durationMs) {
     commit: () => api.updateReverseDuration(durationMs),
     reconcile: loadConfigAfterEngineTick,
     verify: (config) => config?.timer_config?.reverse_duration_ms === durationMs,
-    errorMessage: "Could not update reverse duration",
+    errorMessage: tr("errors.updateReverseDuration"),
   });
 }
 
@@ -329,7 +330,7 @@ export function setPresetDurations(durations) {
  */
 export async function saveShortcutPresetDurations(durations) {
   if (durations.length !== 3) {
-    throw new Error("expected exactly 3 durations");
+    throw new Error(tr("errors.expectedThreeDurations"));
   }
   await api.updatePresetSessionDurations(durations);
   presetDurations.value = [...durations];
@@ -381,7 +382,7 @@ export function updateChannelProgressBeginRatio(channelType, ratio) {
       const entry = config?.channel_configs?.find(([type]) => type === channelType);
       return entry ? entry[1].persistent_state_params_table.progress_begin_ratio === ratio : false;
     },
-    errorMessage: "Could not update channel timing",
+    errorMessage: tr("errors.updateChannelTiming"),
   });
 }
 
@@ -409,7 +410,7 @@ export function updateChannelTargetValue(channelType, channelValue) {
         ? JSON.stringify(entry[1].persistent_state_params_table.target_channel_value) === JSON.stringify(channelValue)
         : false;
     },
-    errorMessage: "Could not update channel target",
+    errorMessage: tr("errors.updateChannelTarget"),
   });
 }
 
@@ -446,7 +447,7 @@ export function updateChannelCurveParams(channelType, steepness) {
         && JSON.stringify(t.settling_curve_parameters) === JSON.stringify(cp)
         && JSON.stringify(t.reverse_curve_parameters) === JSON.stringify(cp);
     },
-    errorMessage: "Could not update channel curve",
+    errorMessage: tr("errors.updateChannelCurve"),
   });
 }
 
@@ -463,7 +464,7 @@ export function setAutostart(enabled) {
     commit: () => api.setAutostartEnabled(enabled),
     reconcile: api.isAutostartEnabled,
     verify: (value) => value === enabled,
-    errorMessage: "Could not update launch at login",
+    errorMessage: tr("errors.updateAutostart"),
   });
 }
 
@@ -480,7 +481,7 @@ export function setSilentStart(enabled) {
     commit: () => api.setSilentStart(enabled),
     reconcile: api.getSilentStart,
     verify: (value) => value === enabled,
-    errorMessage: "Could not update silent start",
+    errorMessage: tr("errors.updateSilentStart"),
   });
 }
 

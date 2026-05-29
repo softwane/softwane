@@ -750,6 +750,54 @@ button {
   gap: 10px;
 }
 
+.locale-option-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.locale-option {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 500;
+  transition:
+    border-color var(--motion-button-ms) var(--motion-soft),
+    background var(--motion-button-ms) var(--motion-soft),
+    color var(--motion-button-ms) var(--motion-soft),
+    transform var(--motion-button-ms) var(--motion-soft);
+}
+
+.locale-option:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--field-accent) 44%, var(--line));
+  background: color-mix(in srgb, var(--surface) 74%, var(--surface-muted));
+}
+
+.locale-option.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--field-accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--field-accent) 12%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--field-accent) 18%, transparent);
+}
+
+.locale-option:focus-visible {
+  outline: 2px solid var(--field-accent);
+  outline-offset: 3px;
+}
+
+.locale-option:disabled {
+  opacity: 0.55;
+  cursor: wait;
+  transform: none;
+}
+
 .settings-group-header {
   display: flex;
   justify-content: space-between;

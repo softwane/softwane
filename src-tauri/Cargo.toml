@@ -24,6 +24,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 tracing-appender = "0.2"
 tauri-plugin-store = "2"
+tauri-plugin-os = "2"
 mimalloc = "*"
 
 [target.'cfg(windows)'.dependencies]
