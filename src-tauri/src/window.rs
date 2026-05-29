@@ -79,17 +79,6 @@ pub async fn show_main_window(app_handle: AppHandle) {
     let Some(window) = app_handle.get_webview_window("main") else {
         if let Err(e) = create_main_window(&app_handle).await {
             tracing::error!("Failed to create main window in show_window: {e:?}");
-            return;
-        }
-        let Some(window) = app_handle.get_webview_window("main") else {
-            tracing::error!("Main window was created but is still unavailable.");
-            return;
-        };
-        if let Err(e) = window.show() {
-            tracing::warn!("Main window showing failed: {e:?}");
-        }
-        if let Err(e) = window.set_focus() {
-            tracing::warn!("Main window focusing failed: {e:?}");
         }
         return;
     };
