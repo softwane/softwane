@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Softwane",
   "version": "0.1.0",
-  "identifier": "com.softwane.app",
+  "identifier": "app.softwane.softwane",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",

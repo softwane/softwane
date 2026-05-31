@@ -1,0 +1,3 @@
+[submodule "kelvin-to-rgb-algo"]
+	path = kelvin-to-rgb-algo
+	url = https://github.com/softwane/kelvin-to-rgb-algo.git
