@@ -24,8 +24,7 @@ pub struct SensoryChannel {
 
 impl SensoryChannel {
     pub fn new(config: ChannelConfig) -> Self {
-        let channel_type: ChannelType =
-            config.persistent_state_params_table.target_channel_value.into();
+        let channel_type = config.persistent_state_params_table.target_channel_value.into();
         Self {
             channel_type,
             switch_on: config.switch_on,

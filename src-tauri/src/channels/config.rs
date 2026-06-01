@@ -2,7 +2,7 @@
 //!
 //! TODO: schema version / migration code for PersistentStateParamsTable.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::{Unexpected, Error}};
 use tauri::Wry;
 use tauri_plugin_store::Store;
 
@@ -116,13 +116,24 @@ pub struct ChannelConfig {
 
 pub fn load_channel_config(store: &Store<Wry>, channel_type: ChannelType) -> ChannelConfig {
     let key = channel_type.store_key();
-    store.get(&key)
+    store.get(key)
         .and_then(|v| Some(serde_json::from_value(v)
+            .and_then(|cfg: ChannelConfig| {
+                let persist_channel_type = cfg.persistent_state_params_table.target_channel_value.r#type();
+                if persist_channel_type != channel_type {
+                    Err(serde_json::Error::invalid_type(
+                        Unexpected::Other(format!("{:?}", persist_channel_type).as_str()),
+                        &format!("{:?}", channel_type).as_str()
+                    ))
+                } else {
+                    Ok(cfg)
+                }
+            })
             .inspect_err(|e| {
-                tracing::warn!(?channel_type, ?e,"stored config schema mismatch, using default");
+                tracing::warn!(?channel_type, ?e,"stored config schema or type mismatch, using default");
                 let value = serde_json::to_value(DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type])
                     .expect("ChannelConfig serialization is infallible");
-                store.set(&key, value);
+                store.set(key, value);
             })
             .unwrap_or(DEFAULT_CHANNEL_CONFIG_ARRAY[channel_type])
         ))
@@ -153,7 +164,7 @@ pub fn store_defaults() -> Vec<(String, serde_json::Value)> {
         .iter()
         .map(|ct| {
             (
-                ct.store_key(),
+                ct.store_key().into(),
                 serde_json::to_value(DEFAULT_CHANNEL_CONFIG_ARRAY[*ct])
                     .expect("ChannelConfig serialization is infallible"),
             )

@@ -35,14 +35,10 @@ macro_rules! define_channels {
             /// Stable key used for persistence.  Even if the enum variant name
             /// changes in a future refactor, this value stays the same so that
             /// previously-stored config continues to deserialise correctly.
-            const fn persist_key(&self) -> &'static str {
+            pub const fn store_key(&self) -> &'static str {
                 match self {
-                    $( ChannelType::$type_var => $persist_key, )*
+                    $( ChannelType::$type_var => concat!("channels.", $persist_key), )*
                 }
-            }
-
-            pub fn store_key(&self) -> String {
-                format!("channels.{}", self.persist_key())
             }
         }
 
@@ -61,6 +57,12 @@ macro_rules! define_channels {
                 match value {
                     $( ChannelValue::$val_var(_) => ChannelType::$type_var, )*
                 }
+            }
+        }
+
+        impl ChannelValue {
+            pub fn r#type(&self) -> ChannelType {
+                (*self).into()
             }
         }
 
