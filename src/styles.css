@@ -920,8 +920,17 @@ button {
   cursor: pointer;
 }
 
+.channel-toggle.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .channel-toggle input[type="checkbox"] {
   accent-color: var(--accent);
+}
+
+.channel-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
 }
 
 .compatibility-note {
@@ -957,6 +966,10 @@ button {
   opacity: 0.72;
 }
 
+.channel-setting-card.is-blocked {
+  opacity: 0.6;
+}
+
 .channel-setting-head {
   display: flex;
   align-items: center;
@@ -973,9 +986,17 @@ button {
   cursor: pointer;
 }
 
+.setting-switch.is-disabled {
+  cursor: not-allowed;
+}
+
 .setting-switch input[type="checkbox"] {
   margin-top: 2px;
   accent-color: var(--accent);
+}
+
+.setting-switch input[type="checkbox"]:disabled {
+  cursor: not-allowed;
 }
 
 .setting-switch span {

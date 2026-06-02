@@ -10,6 +10,11 @@ import KeyBindingInput from "./components/KeyBindingInput.vue";
 import { SHORTCUT_ACTIONS } from "./api/types";
 import { SUPPORTED_LOCALES, SYSTEM_LOCALE_SENTINEL } from "./i18n";
 import {
+  CHANNEL_CONFLICTS,
+  getBlockingChannel,
+  isChannelBlockedByCompatibility,
+} from "./channelCompatibility";
+import {
   init,
   refreshConfig,
   channelConfigs,
@@ -60,15 +65,11 @@ const contributors = [
   { username: "RUSRUSHB", name: "Eason Z" },
 ];
 let channelCompatibilityNoticeTimer = 0;
-const channelConflicts = {
-  saturation: ["color_temp", "brightness"],
-  color_temp: ["saturation"],
-  brightness: ["saturation"],
-};
 
 const { resolvedTheme, setThemeMode, themeMode } = useAppearance();
 const localePreference = ref(props.initialLocalePreference);
 const isUpdatingLocale = ref(false);
+const isMacOS = detectMacOS();
 const localeOptions = computed(() => [
   { id: SYSTEM_LOCALE_SENTINEL, label: t("language.system") },
   ...SUPPORTED_LOCALES.map((id) => ({ id, label: t(`language.${id}`) })),
@@ -234,6 +235,23 @@ const cueSummaryText = computed(() => {
 function hasChannel(type) { return channelConfigs.value.some(([t]) => t === type); }
 function channelLabel(type) { return t(`cue.channel.${type}.label`); }
 
+function getChannelBlockedBy(type) {
+  return getBlockingChannel(type, channelEnabled.value, CHANNEL_CONFLICTS, isMacOS);
+}
+
+function isChannelToggleDisabled(type) {
+  return isChannelBlockedByCompatibility(type, channelEnabled.value, CHANNEL_CONFLICTS, isMacOS);
+}
+
+function getChannelDisabledTooltip(type) {
+  const blockedBy = getChannelBlockedBy(type);
+  if (!blockedBy) return "";
+  return t("cue.compatibilityBlocked", {
+    current: channelLabel(blockedBy),
+    target: channelLabel(type),
+  });
+}
+
 function clearChannelCompatibilityNotice() {
   window.clearTimeout(channelCompatibilityNoticeTimer);
   channelCompatibilityNotice.value = "";
@@ -315,8 +333,11 @@ function onStartSession() {
 }
 
 async function onToggleChannel(type, checked) {
+  if (checked && isChannelToggleDisabled(type)) {
+    return;
+  }
   const turnedOffTypes = checked
-    ? (channelConflicts[type] ?? []).filter((conflict) => channelEnabled.value[conflict])
+    ? (CHANNEL_CONFLICTS[type] ?? []).filter((conflict) => channelEnabled.value[conflict])
     : [];
   const updated = await toggleChannel(type, checked);
   if (updated && turnedOffTypes.length > 0) {
@@ -580,14 +601,14 @@ onMounted(async () => {
           </label>
         </div>
         <div class="channel-toggles">
-          <label v-if="hasChannel('saturation')" class="channel-toggle">
-            <input type="checkbox" :checked="channelEnabled.saturation" @change="onToggleChannel('saturation', $event.target.checked)" /><span>{{ channelLabel("saturation") }}</span>
+          <label v-if="hasChannel('saturation')" :class="['channel-toggle', { 'is-disabled': isChannelToggleDisabled('saturation') }]" :title="getChannelDisabledTooltip('saturation')">
+            <input type="checkbox" :checked="channelEnabled.saturation" :disabled="isChannelToggleDisabled('saturation')" @change="onToggleChannel('saturation', $event.target.checked)" /><span>{{ channelLabel("saturation") }}</span>
           </label>
-          <label v-if="hasChannel('color_temp')" class="channel-toggle">
-            <input type="checkbox" :checked="channelEnabled.color_temp" @change="onToggleChannel('color_temp', $event.target.checked)" /><span>{{ channelLabel("color_temp") }}</span>
+          <label v-if="hasChannel('color_temp')" :class="['channel-toggle', { 'is-disabled': isChannelToggleDisabled('color_temp') }]" :title="getChannelDisabledTooltip('color_temp')">
+            <input type="checkbox" :checked="channelEnabled.color_temp" :disabled="isChannelToggleDisabled('color_temp')" @change="onToggleChannel('color_temp', $event.target.checked)" /><span>{{ channelLabel("color_temp") }}</span>
           </label>
-          <label v-if="hasChannel('brightness')" class="channel-toggle">
-            <input type="checkbox" :checked="channelEnabled.brightness" @change="onToggleChannel('brightness', $event.target.checked)" /><span>{{ channelLabel("brightness") }}</span>
+          <label v-if="hasChannel('brightness')" :class="['channel-toggle', { 'is-disabled': isChannelToggleDisabled('brightness') }]" :title="getChannelDisabledTooltip('brightness')">
+            <input type="checkbox" :checked="channelEnabled.brightness" :disabled="isChannelToggleDisabled('brightness')" @change="onToggleChannel('brightness', $event.target.checked)" /><span>{{ channelLabel("brightness") }}</span>
           </label>
         </div>
         <p v-if="channelCompatibilityNotice" class="compatibility-note" role="status">{{ channelCompatibilityNotice }}</p>
@@ -654,10 +675,10 @@ onMounted(async () => {
           <p v-if="channelCompatibilityNotice" class="compatibility-note" role="status">{{ channelCompatibilityNotice }}</p>
 
           <div class="channel-settings-list">
-            <article v-for="[type] in channelConfigs" :key="type" :class="['channel-setting-card', { 'is-disabled': !channelEnabled[type] }]">
+            <article v-for="[type] in channelConfigs" :key="type" :class="['channel-setting-card', { 'is-disabled': !channelEnabled[type], 'is-blocked': isChannelToggleDisabled(type) }]" :title="getChannelDisabledTooltip(type)">
               <div class="channel-setting-head">
-                <label class="setting-switch">
-                  <input type="checkbox" :checked="channelEnabled[type]" @change="onToggleChannel(type, $event.target.checked)" />
+                <label :class="['setting-switch', { 'is-disabled': isChannelToggleDisabled(type) }]">
+                  <input type="checkbox" :checked="channelEnabled[type]" :disabled="isChannelToggleDisabled(type)" @change="onToggleChannel(type, $event.target.checked)" />
                   <span>
                     <strong>{{ channelLabel(type) }}</strong>
                     <small>{{ channelDescription(type) }}</small>

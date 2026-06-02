@@ -64,6 +64,7 @@
     "noActiveCue": "No visual cue is active",
     "activeSummary": "{active} active",
     "compatibilityNotice": "{names} turned off because it cannot run with {enabled} on macOS.",
+    "compatibilityBlocked": "{current} and {target} cannot be enabled together on macOS. Turn off {current} before enabling {target}.",
     "channelSummaryAria": "Channel summary",
     "channel": {
       "saturation": {

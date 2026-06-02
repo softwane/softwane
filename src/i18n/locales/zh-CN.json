@@ -64,6 +64,7 @@
     "noActiveCue": "当前没有启用视觉提示",
     "activeSummary": "{active} 已启用",
     "compatibilityNotice": "{names} 已关闭，因为它无法与 macOS 上的 {enabled} 同时运行。",
+    "compatibilityBlocked": "macOS 上不能同时启用 {current} 和 {target}。请先关闭 {current}，再启用 {target}。",
     "channelSummaryAria": "通道摘要",
     "channel": {
       "saturation": {

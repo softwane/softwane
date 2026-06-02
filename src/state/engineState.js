@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import * as api from "../api/commands";
 import { tr } from "../i18n/runtime";
+import { CHANNEL_CONFLICTS } from "../channelCompatibility";
 
 // ── Reactive state ────────────────────────────────────────────────────
 
@@ -42,12 +43,6 @@ let _errorTimer = 0;
 const _mutationTokens = new Map();
 
 const ENGINE_RECONCILE_DELAY_MS = 80;
-const CHANNEL_CONFLICTS = {
-  saturation: ["color_temp", "brightness"],
-  color_temp: ["saturation"],
-  brightness: ["saturation"],
-};
-
 function cloneValue(value) {
   return JSON.parse(JSON.stringify(value));
 }
