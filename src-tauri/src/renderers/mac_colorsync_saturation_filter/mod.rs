@@ -70,7 +70,7 @@ impl MacColorSyncSaturationFilter {
         if (s - self.last_s).abs() < SATURATION_BUCKET {
             let _ = tx.try_send(EngineEvent::Renderer(
                 RendererEvent::RenderUnappliedDueToUnchanged {
-                    rederer_name: self.name,
+                    renderer_name: self.name,
                 }
             ));
             return;
