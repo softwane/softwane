@@ -18,11 +18,14 @@ use profile_ops::ProfileInfo;
 
 pub(super) const PROFILE_STORE_KEY: &str = "profile_baseline_path";
 
+const SATURATION_BUCKET: f64 = 0.004; // ~ 1/256
+
 #[derive(Debug)]
 pub(super) struct MacColorSyncSaturationFilter {
     name: &'static str,
     switch_on: bool,
     profiles: HashMap<CFRetained<CFUUID>, ProfileInfo>,
+    last_s: f64,
 }
 
 impl MacColorSyncSaturationFilter {
@@ -31,6 +34,7 @@ impl MacColorSyncSaturationFilter {
             name: "MacOS-ColorSync-Saturation-Filter",
             switch_on: false,
             profiles: HashMap::new(),
+            last_s: 1.0,
         }
     }
 
@@ -63,8 +67,16 @@ impl MacColorSyncSaturationFilter {
             _ => panic!("Invalid ChannelValue when render. Expect Saturation, but get: {saturation:?}."),
         };
 
-        // TODO: bucket-based early-exit for unchanged saturation values
-        // after Update de-duplication (currently always recomputes on float changes).
+        if (s - self.last_s).abs() < SATURATION_BUCKET {
+            let _ = tx.try_send(EngineEvent::Renderer(
+                RendererEvent::RenderUnappliedDueToUnchanged {
+                    rederer_name: self.name,
+                }
+            ));
+            return;
+        }
+
+        self.last_s = s;
 
         let s_mat = utils::saturation_to_ct_matrix3(s);
         let s_inv = match s_mat.try_inverse() {
