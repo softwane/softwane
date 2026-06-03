@@ -98,7 +98,12 @@
   "session": {
     "kicker": "会话",
     "title": "快速开始时长",
+    "automation": "自动化",
     "preset": "预设 {index}",
+    "launchSessionOnStart": "启动 Softwane 时自动开始预设 1",
+    "launchSessionOnStartDescription": "应用启动时自动用预设 1 开始一轮会话，静默启动也会生效。",
+    "autoStartNextSession": "上一轮完整结束后自动开始预设 1",
+    "autoStartNextSessionDescription": "当前会话结束并恢复到空闲后，自动用预设 1 开始下一轮会话。",
     "minutesShort": "分钟"
   },
   "shortcuts": {
@@ -180,7 +185,9 @@
     "updateChannelTarget": "无法更新通道目标值",
     "updateChannelCurve": "无法更新通道曲线",
     "updateAutostart": "无法更新登录启动设置",
-    "updateSilentStart": "无法更新静默启动设置"
+    "updateSilentStart": "无法更新静默启动设置",
+    "updateLaunchSessionOnStart": "无法更新启动自动开始会话设置",
+    "updateAutoStartNextSession": "无法更新自动开始下一轮设置"
   },
   "tray": {
     "crashIndicator": "错",

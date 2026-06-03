@@ -98,7 +98,12 @@
   "session": {
     "kicker": "Session",
     "title": "Quick start durations",
+    "automation": "Automation",
     "preset": "Preset {index}",
+    "launchSessionOnStart": "Start preset 1 when Softwane launches",
+    "launchSessionOnStartDescription": "Automatically begin a session with preset 1 during app startup, including silent start.",
+    "autoStartNextSession": "Start preset 1 after the previous session fully ends",
+    "autoStartNextSessionDescription": "After the current session finishes and recovery returns to idle, automatically begin the next session with preset 1.",
     "minutesShort": "min"
   },
   "shortcuts": {
@@ -180,7 +185,9 @@
     "updateChannelTarget": "Could not update channel target",
     "updateChannelCurve": "Could not update channel curve",
     "updateAutostart": "Could not update launch at login",
-    "updateSilentStart": "Could not update silent start"
+    "updateSilentStart": "Could not update silent start",
+    "updateLaunchSessionOnStart": "Could not update launch session setting",
+    "updateAutoStartNextSession": "Could not update next session setting"
   },
   "tray": {
     "crashIndicator": "Err",

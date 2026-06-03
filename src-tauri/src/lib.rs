@@ -22,8 +22,9 @@ use tauri_plugin_store::StoreBuilder;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use engine::{Engine, EngineHandle, EngineEvent, ProgressCommandInner};
-use commands::{DEFAULT_DURATIONS, STORE_KEY_LAST_CRASH, STORE_KEY_PRESET_SESSION_DURATIONS};
+use commands::{DEFAULT_DURATIONS, STORE_KEY_AUTO_START_NEXT_SESSION, STORE_KEY_LAST_CRASH, STORE_KEY_LAUNCH_SESSION_ON_START, STORE_KEY_PRESET_SESSION_DURATIONS};
 use shortcuts::{STORE_KEY_SHORTCUT_BINDINGS, default_shortcut_bindings};
+use timer_state_machine::commands::StateCommand;
 use tray::notify_crash;
 use window::{STORE_KEY_SILENT_START, WindowManager, create_main_window};
 
@@ -77,6 +78,14 @@ pub fn run() {
             defaults.insert(
                 STORE_KEY_PRESET_SESSION_DURATIONS.into(),
                 serde_json::json!(DEFAULT_DURATIONS),
+            );
+            defaults.insert(
+                STORE_KEY_LAUNCH_SESSION_ON_START.into(),
+                serde_json::json!(false),
+            );
+            defaults.insert(
+                STORE_KEY_AUTO_START_NEXT_SESSION.into(),
+                serde_json::json!(false),
             );
             defaults.insert(
                 STORE_KEY_SHORTCUT_BINDINGS.into(),
@@ -176,6 +185,18 @@ pub fn run() {
             tray::setup_tray(app.handle())?;
             shortcuts::setup_global_shortcuts(app.handle());
 
+            if commands::get_launch_session_on_start(app.handle().clone()).unwrap_or(false) {
+                let default_duration = commands::get_preset_session_durations(app.handle().clone())[0];
+                let tx = app.state::<EngineHandle>().tx.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = tx.send(EngineEvent::State(StateCommand::StartSession {
+                        target_duration_ms: default_duration,
+                    })).await {
+                        tracing::error!("Failed to start launch session: {err:?}.");
+                    }
+                });
+            }
+
             // Crash recovery: notify tray if last run crashed
             if store.get(STORE_KEY_LAST_CRASH).is_some() {
                 tray::notify_crash(app.handle());
@@ -232,6 +253,10 @@ pub fn run() {
             commands::acknowledge_crash,
             commands::set_autostart_enabled,
             commands::is_autostart_enabled,
+            commands::get_launch_session_on_start,
+            commands::set_launch_session_on_start,
+            commands::get_auto_start_next_session,
+            commands::set_auto_start_next_session,
             shortcuts::get_shortcut_bindings,
             shortcuts::update_shortcut_bindings,
             window::get_silent_start,

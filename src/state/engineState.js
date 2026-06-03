@@ -12,6 +12,8 @@ export const timerConfig = ref({ settling_duration_ms: 5000, reverse_duration_ms
 export const presetDurations = ref([25 * 60_000, 50 * 60_000, 90 * 60_000]);
 export const autostartEnabled = ref(false);
 export const silentStart = ref(false);
+export const launchSessionOnStart = ref(false);
+export const autoStartNextSession = ref(false);
 export const configMutationError = ref("");
 
 /** @type {import('vue').Ref<import('../api/types').TimerStateSnapshot|null>} */
@@ -89,13 +91,15 @@ export async function init() {
   if (_initialized) return;
   _initialized = true;
 
-  const [config, durations, crash, shortcuts, autostart, silent] = await Promise.all([
+  const [config, durations, crash, shortcuts, autostart, silent, launchSession, autoNext] = await Promise.all([
     api.getAvailableStoredConfig().catch(() => null),
     api.getPresetSessionDurations().catch(() => null),
     api.getLastCrash().catch(() => null),
     api.getShortcutBindings().catch(() => null),
     api.isAutostartEnabled().catch(() => null),
     api.getSilentStart().catch(() => null),
+    api.getLaunchSessionOnStart().catch(() => null),
+    api.getAutoStartNextSession().catch(() => null),
   ]);
 
   if (config) {
@@ -117,6 +121,12 @@ export async function init() {
   }
   if (typeof silent === "boolean") {
     silentStart.value = silent;
+  }
+  if (typeof launchSession === "boolean") {
+    launchSessionOnStart.value = launchSession;
+  }
+  if (typeof autoNext === "boolean") {
+    autoStartNextSession.value = autoNext;
   }
 
   api.registerProgressChannel(onProgress);
@@ -477,6 +487,40 @@ export function setSilentStart(enabled) {
     reconcile: api.getSilentStart,
     verify: (value) => value === enabled,
     errorMessage: tr("errors.updateSilentStart"),
+  });
+}
+
+export function setLaunchSessionOnStart(enabled) {
+  const previous = launchSessionOnStart.value;
+  return optimisticMutation({
+    key: "session:launch_on_start",
+    applyLocal: () => {
+      launchSessionOnStart.value = enabled;
+    },
+    restoreLocal: () => {
+      launchSessionOnStart.value = previous;
+    },
+    commit: () => api.setLaunchSessionOnStart(enabled),
+    reconcile: api.getLaunchSessionOnStart,
+    verify: (value) => value === enabled,
+    errorMessage: tr("errors.updateLaunchSessionOnStart"),
+  });
+}
+
+export function setAutoStartNextSession(enabled) {
+  const previous = autoStartNextSession.value;
+  return optimisticMutation({
+    key: "session:auto_start_next",
+    applyLocal: () => {
+      autoStartNextSession.value = enabled;
+    },
+    restoreLocal: () => {
+      autoStartNextSession.value = previous;
+    },
+    commit: () => api.setAutoStartNextSession(enabled),
+    reconcile: api.getAutoStartNextSession,
+    verify: (value) => value === enabled,
+    errorMessage: tr("errors.updateAutoStartNextSession"),
   });
 }
 

@@ -100,6 +100,18 @@ export const setAutostartEnabled = (enabled: boolean) =>
 
 export const isAutostartEnabled = () => invoke<boolean>("is_autostart_enabled");
 
+export const getLaunchSessionOnStart = () =>
+  invoke<boolean>("get_launch_session_on_start");
+
+export const setLaunchSessionOnStart = (enabled: boolean) =>
+  invoke<void>("set_launch_session_on_start", { enabled });
+
+export const getAutoStartNextSession = () =>
+  invoke<boolean>("get_auto_start_next_session");
+
+export const setAutoStartNextSession = (enabled: boolean) =>
+  invoke<void>("set_auto_start_next_session", { enabled });
+
 // ── Shortcuts ────────────────────────────────────────────────────────────
 
 export const getShortcutBindings = () =>

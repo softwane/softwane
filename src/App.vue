@@ -22,6 +22,8 @@ import {
   presetDurations,
   autostartEnabled,
   silentStart,
+  launchSessionOnStart,
+  autoStartNextSession,
   configMutationError,
   shortcutBindings,
   timerState,
@@ -44,6 +46,8 @@ import {
   updateChannelCurveParams,
   setAutostart,
   setSilentStart,
+  setLaunchSessionOnStart,
+  setAutoStartNextSession,
   clearConfigMutationError,
 } from "./state/engineState";
 
@@ -375,7 +379,7 @@ function openContributorProfile(username) {
   return openExternalUrl(`https://github.com/${username}`);
 }
 
-// ── Preset durations (Save / Cancel) ──────────────────────────────────
+// ── Preset durations (autosave) ───────────────────────────────────────
 
 const presetDraft = useDraft(presetDurations, async (d) => {
   await saveShortcutPresetDurations(d);
@@ -390,28 +394,27 @@ const startPresetOptions = computed(() => presetDurations.value.map((durationMs,
 })));
 const customStartMinutes = computed(() => Math.max(1, Math.min(120, Number(workMinutes.value) || 50)));
 const customStartLabel = computed(() => t("startLayer.startMinutes", { minutes: customStartMinutes.value }));
+let presetSaveToken = 0;
+let presetSaveQueue = Promise.resolve();
 
-function onDraftDurationChange(index, value) {
+async function onDraftDurationChange(index, value) {
   const v = Math.max(60_000, Number(value) * 60_000 || 60_000);
-  presetDraft.draft.value = [
+  const next = [
     ...presetDraft.draft.value.slice(0, index),
     v,
     ...presetDraft.draft.value.slice(index + 1),
   ];
-}
-
-async function onPresetSave() {
+  presetDraft.draft.value = next;
+  const token = ++presetSaveToken;
   presetSaveError.value = "";
   try {
-    await presetDraft.commit();
+    presetSaveQueue = presetSaveQueue
+      .catch(() => {})
+      .then(() => saveShortcutPresetDurations(next));
+    await presetSaveQueue;
   } catch (e) {
-    presetSaveError.value = String(e);
+    if (token === presetSaveToken) presetSaveError.value = String(e);
   }
-}
-
-function onPresetCancel() {
-  presetSaveError.value = "";
-  presetDraft.cancel();
 }
 
 // ── Shortcut bindings (autosave / Cancel) ─────────────────────────────
@@ -735,9 +738,27 @@ onMounted(async () => {
               <p class="settings-kicker">{{ t("session.kicker") }}</p>
               <h2 id="session-settings-title" class="settings-section-title">{{ t("session.title") }}</h2>
             </div>
-            <div class="settings-group-actions">
-              <button class="ghost-button" type="button" :disabled="!presetDraft.dirty.value" @click="onPresetCancel">{{ t("actions.cancel") }}</button>
-              <button class="ghost-button ghost-button-primary" type="button" :disabled="!presetDraft.dirty.value" @click="onPresetSave">{{ t("actions.save") }}</button>
+          </div>
+          <div class="settings-subsection">
+            <div class="settings-group-header">
+              <span class="settings-group-title">{{ t("session.automation") }}</span>
+              <span class="settings-group-meta">{{ t("settings.changesApplyImmediately") }}</span>
+            </div>
+            <div class="startup-toggle-list">
+              <label class="field startup-toggle">
+                <input type="checkbox" :checked="launchSessionOnStart" @change="setLaunchSessionOnStart($event.target.checked)" />
+                <span>
+                  <strong>{{ t("session.launchSessionOnStart") }}</strong>
+                  <small>{{ t("session.launchSessionOnStartDescription") }}</small>
+                </span>
+              </label>
+              <label class="field startup-toggle">
+                <input type="checkbox" :checked="autoStartNextSession" @change="setAutoStartNextSession($event.target.checked)" />
+                <span>
+                  <strong>{{ t("session.autoStartNextSession") }}</strong>
+                  <small>{{ t("session.autoStartNextSessionDescription") }}</small>
+                </span>
+              </label>
             </div>
           </div>
           <div class="field-grid preset-duration-grid">

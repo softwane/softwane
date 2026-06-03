@@ -22,11 +22,13 @@ use tauri_plugin_store::Store;
 
 use crate::{
     channels::{SensoryChannelsSystem, load_channel_config_array},
+    commands::{get_auto_start_next_session, get_preset_session_durations},
     timer_state_machine::{TimerStateMachine, load_timer_config},
     renderers::{RendererDispatcher, events::RendererEvent},
     state::SharedTimerState,
     tray::{refresh_tray_menu, update_tray_progress},
 };
+use crate::timer_state_machine::{TimerState, commands::StateCommand};
 use config::StoredConfig;
 
 const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(100); // 10 fps 给前端
@@ -112,8 +114,10 @@ impl Engine {
         }
 
         // State advance
+        let state_before_tick = self.timer.state();
         self.timer.handle_commands(&mut frame_events);
         self.timer.tick(dt_ms, &mut frame_events);
+        self.start_next_session_if_needed(state_before_tick, &mut frame_events);
 
         // Channel calculation
         self.channels.handle_commands(&mut frame_events);
@@ -175,6 +179,24 @@ impl Engine {
 
     fn recommended_tick_interval(&self) -> Duration {
         TARGET_FRAME_INTERVAL
+    }
+
+    fn start_next_session_if_needed(&mut self, previous_state: TimerState, frame_events: &mut FrameEvents) {
+        if !matches!(previous_state, TimerState::Reverse { .. }) {
+            return;
+        }
+        if !matches!(self.timer.state(), TimerState::Idle) {
+            return;
+        }
+        if !get_auto_start_next_session(self.app.clone()).unwrap_or(false) {
+            return;
+        }
+
+        let default_duration = get_preset_session_durations(self.app.clone())[0];
+        frame_events.state_commands.push(StateCommand::StartSession {
+            target_duration_ms: default_duration,
+        });
+        self.timer.handle_commands(frame_events);
     }
 
     fn update_frontend_state(&mut self, frame_events: &FrameEvents) {
